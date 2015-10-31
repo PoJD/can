@@ -8,8 +8,8 @@
  * Created on October 28, 2015, 6:07 PM
  */
 
-#include <xc.h>
-#include "config.h"
+#include <xc.h> // all specifics for this chip
+#include "config.h" // my custom parameter setup for this chip
 
 typedef unsigned char boolean;
 #define TRUE 1
