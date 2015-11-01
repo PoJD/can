@@ -10,6 +10,7 @@
 
 #include <xc.h> // all specifics for this chip
 #include "config.h" // my custom parameter setup for this chip
+#include "can.h" // my custom can bus setup and API functions
 
 typedef unsigned char boolean;
 #define TRUE 1
@@ -28,7 +29,7 @@ void configureInput() {
     // only configure B ports - since only B7:B4 have the interrupt on change feature, we need that...
     // so we configure B5 only (since B6 and B7 also have PGC and PGD that we need for debugging)
     // all other shared functionality on the pin is disabled by default, so no need to override anything
-    TRISB = 0b00100000;
+    TRISBbits.TRISB5 = 1; // avoid setting other TRIS bits on B since CAN also needs that and did already set it up before
     // enable port change interrupt in B
     INTCONbits.RBIE = 1;
     // enable weak pull ups (only for the enabled input)
@@ -89,6 +90,7 @@ void interrupt handleInterrupt(void) {
 }
 
 int main(void) {
+    configureCan();
     configureInterrupts();
 
     while (1) {
