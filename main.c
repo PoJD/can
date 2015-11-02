@@ -9,17 +9,14 @@
  */
 
 #include <xc.h> // all specifics for this chip
+#include "utils.h" // some generic utilities (data types, etc)
 #include "config.h" // my custom parameter setup for this chip
 #include "can.h" // my custom can bus setup and API functions
 
-typedef unsigned char boolean;
-#define TRUE 1
-#define FALSE 0
-
 boolean buttonPressed = FALSE;
 boolean timerElapsed = FALSE;
-unsigned int seconds = 0;
-unsigned int hearbeatTimeout = 300; // 5 * 60 sec = 5 minutes, TODO configurable?
+int seconds = 0;
+int hearbeatTimeout = 300; // 5 * 60 sec = 5 minutes, TODO configurable?
 
 /*
  * Input and timer setup
@@ -93,6 +90,10 @@ int main(void) {
     configureCan();
     configureInterrupts();
 
+    // testing only
+    unsigned char testChar[] = "12345678";
+    sendCanMessage(0b10001110001, testChar);
+    
     while (1) {
         if (buttonPressed) {
             // TODO send CAN message (get all data you can - error registers, current B5 in PORTB, uptime, etc)

@@ -15,6 +15,7 @@
       <itemPath>config.h</itemPath>
       <itemPath>main.c</itemPath>
       <itemPath>can.h</itemPath>
+      <itemPath>utils.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
