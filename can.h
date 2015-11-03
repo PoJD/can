@@ -17,6 +17,9 @@ extern "C" {
     
 #include "utils.h"
 
+/**
+ * Type of CanMessage
+ */
 typedef enum {
     NORMAL   = 0b000, // normal message is a message sent by the node to reveal some action performed
     HEARTBEAT = 0b001, // hearbeat message is also sent by this node, but only triggered by a timer
@@ -50,10 +53,12 @@ typedef struct {
      boolean isSwitchOn;
  } CanMessage;
 
-/** Modes of the controller (last parameter in can_init*/ 
-#define CONFIG_MODE 0b100
-#define LOOPBACK_MODE 0b010
-#define NORMAL_MODE 0b000
+/** Modes of the controller - see datasheet */ 
+ typedef enum {
+    CONFIG_MODE   = 0b100,
+    LOOPBACK_MODE = 0b010,
+    NORMAL_MODE   = 0b000
+} Mode;
 
 /**
  * Initialize the CAN stack protocol according to the data sheet, see below:
@@ -75,7 +80,7 @@ typedef struct {
  * @param cpuSpeed speed of the clock in MHz (mind that PLL settings in registers may affect this)
  * @param mode new mode to use
  */
- void can_init(int baudRate, int cpuSpeed, byte mode);
+ void can_init(int baudRate, int cpuSpeed, Mode mode);
  
 /**
  * Attempts to send the message using TXB0 register (not using any others right now)

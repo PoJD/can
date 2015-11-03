@@ -13,7 +13,7 @@
 #include "utils.h"
 #include "can.h"
 
-void can_setMode(unsigned char mode, boolean waitForSwitch) {
+void can_setMode(Mode mode, boolean waitForSwitch) {
     CANCONbits.REQOP = mode;
     // if wait was required, then wait until we are in configuration mode (it may take a few cycles according to datasheet)
     while (waitForSwitch && CANSTATbits.OPMODE != mode);    
@@ -39,7 +39,7 @@ void can_setupBaudRate(int baudRate, int cpuSpeed) {
  * Public API goes here
  */
 
-void can_init(int baudRate, int cpuSpeed, unsigned char mode) {
+void can_init(int baudRate, int cpuSpeed, Mode mode) {
     can_setMode(CONFIG_MODE, TRUE);
 
     // no need to configure ECAN registers - mode legacy by default
