@@ -1,4 +1,7 @@
 /* 
+ * Main CAN interface. Provides methods for initializing the CAN protocol stack as well as sending CAN traffic over.
+ * Implemented from PIC18F2XKXX datasheet, so could work for other chips too (assuming xc.h is included in your main file prior to this one)
+ * 
  * File:   can.h
  * Author: pojd
  *
@@ -14,34 +17,46 @@ extern "C" {
     
 #include "utils.h"
 
-#define BAUD_RATE 50 // speed in kbps
-#define CPU_SPEED 16 // speed in MHz
-
-void switchCanMode(int mode, boolean wait) {
-    // now switch CAN BUS to configuration mode
-    CANCONbits.REQOP = mode;
-    // if wait was required, then wait until we are in configuration mode (it may take a few cycles according to datasheet)
-    while (wait && CANSTATbits.OPMODE != mode);    
-}
-
-void setupBaudRate() {
-    // SJW to be 1
-    // will use 1 TQ for SYNC, 4 for PROP SEG, 8 for phase 1 and 3 for phase 2 = 16TQ (recommendation in datasheeet to place sample point at 80% of bit time)
-    // TBIT = 1000 / BAUD_RATE = 16TQ => TQ = 1000 / (BAUD_RATE)
-    // TQ (micros) = (2 * (BRP + 1))/CPU_SPEED (MHz) => BRP = (1000*CPU_SPEED)/(32*BAUD_RATE) -1, BRP = 9 = 0b1001 (for our speed and setting)
-
-    // BRGCON1 = first 2 bits as 0 = SJW 1, last 6 bits are BRP, so mask first two bits of BRP (to make SJW 00)
-    int BRP = (int)(1000*CPU_SPEED)/(int)(32*BAUD_RATE) -1;
-    BRGCON1 = BRP & 0b00111111;
+typedef enum {
+    NORMAL   = 0b000, // normal message is a message sent by the node to reveal some action performed
+    HEARTBEAT = 0b001, // hearbeat message is also sent by this node, but only triggered by a timer
+    CONFIG   = 0b010  // config would typically be sent by some master node in the network to setup this node (so this node would receive this message instead)
+} MessageType;
     
-    // phase 2 segment programmable (1), sampled once (0), 3 bits for phase seg 1 (8=111), 3 bits for propagation time (4=011)
-    BRGCON2 = 0b10111011;
-    // enable can bus wake up (0), line filter not applied to this (0), 3 unused bits (0), phase segment 2 (3=010)
-    BRGCON3 = 0b00000010;
-}
+/**
+ * CanMessage structure - main structure for sending CAN traffic over
+ */
+typedef struct {
+     
+     /*
+      * The below will become part of the can ID sent as part of this CAN message (custom protocol)
+      */
+
+     /** the message ID - 8 bits only in this application, other 3 as part of the final can ID are used to encode other information  */
+     byte messageID;
+          
+     /** type of the message to be sent  */
+     MessageType messageType;
+
+     /*
+      * The below will become part of the data payload sent as part of this CAN message (custom protocol)
+      */
+     
+     /**
+      * Boolean determining whether the switch is on or off. The semantics of this are up to the switch (e.g. on always in the case of lights,
+      * while on/off in the case of reed switch)
+      * By default the switch is on, e.g. heartbeat message will find out on its own though
+      */
+     boolean isSwitchOn;
+ } CanMessage;
+
+/** Modes of the controller (last parameter in can_init*/ 
+#define CONFIG_MODE 0b100
+#define LOOPBACK_MODE 0b010
+#define NORMAL_MODE 0b000
 
 /**
- * Configures CAN according to the data sheet, see below:
+ * Initialize the CAN stack protocol according to the data sheet, see below:
  * 
  * Initial LAT and TRIS bits for RX and TX CAN.
  * Ensure that the ECAN module is in Configuration mode.
@@ -55,59 +70,20 @@ void setupBaudRate() {
  * rides the appropriate TRIS bit for CANTX. The user
  * must ensure that the appropriate TRIS bit for CANRX
  * is set.
+
+ * @param baudRate the baud rate to use (in kbits per seond). Max is 500 (the implementation uses 16TQ for the bit sequencing)
+ * @param cpuSpeed speed of the clock in MHz (mind that PLL settings in registers may affect this)
+ * @param mode new mode to use
  */
-void configureCan() {
-    // TRIS3 = CAN BUS RX = has to be set as INPUT, all others as outputs (we assume we are the first to setup whole TRISB here)
-    TRISB = 0b00001000;
-    // now switch CAN BUS to configuration mode
-    switchCanMode(0b100, TRUE);
-
-    // no need to configure ECAN registers - mode legacy by default
-    // CIOCON is probably OK too (CAN IO register)
-    setupBaudRate();
-    // TODO Set up the Filter and Mask registers.
-
-    // now switch CAN BUS required mode (loopback for now, will be normal - 000 in the future)
-    // do not wait for the mode to actually switch here (loopback does not seem to honor that)
-    switchCanMode(0b010, FALSE);
-}
-
+ void can_init(int baudRate, int cpuSpeed, byte mode);
+ 
 /**
  * Attempts to send the message using TXB0 register (not using any others right now)
  * 
  * @param canID: the can ID (standard, ie 11 bits) of the message to be sent
  * @param data: data to be sent over CAN (takes all 8 bytes)
  */
-void sendCanMessage(int canID, unsigned char* data) {
-    // first check the register is not in error (previous send failed) - if so, then clear the flag and start sending this message
-    // the error sent counter will be increased, so we can read this information later anyway
-    if (TXB0CONbits.TXERR) {
-        TXB0CONbits.TXERR = 0;
-        TXB0CONbits.TXREQ = 0; // this will make the register RW again (and will pass the below loop as a result)
-    }
-    // confirm nothing is in the transmit register yet (previous can message sent)    
-    while (TXB0CONbits.TXREQ);
-    // we have an int, which should be 16bits, so take bits 5-12 to set TXB0SIDH (first 8 bits of standard ID) - then move it by 2 to get the proper 8 bit number
-    TXB0SIDH = (0b11111111000 & canID) >> 3;
-    // and now take the last 2 bits to the TXB0SIDL register (remainder of the ID)
-    TXB0SIDL = (0b111 & canID) << 5;
-
-    // now find out how much data to send - should be 8 bytes top
-    int dataSize = data ? sizeof(data) : 0; 
-    if (dataSize > 8) {
-        dataSize = 8; // otherwise simply skip further data and only take first 8 bytes
-        
-    }
-    // TXB0DLC - last 4 bits should contain data length - so take those from data size
-    TXB0DLC = dataSize & 0b1111;
-    // now populate TXB0Dm data registers - m in 0..7
-    TXB0D0 = data;
-    // TODO introduce custom structure to contain CAN message - both can ID and data - and add some methods to be able to extend the data somehow...
-    
-    // request transmitting the message (setting the special bit)
-    TXB0CONbits.TXREQ = 1; 
-}
-
+void can_send(CanMessage *canMessage);
 
 #ifdef	__cplusplus
 }

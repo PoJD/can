@@ -8,25 +8,40 @@
  * Created on October 28, 2015, 6:07 PM
  */
 
-#include <xc.h> // all specifics for this chip
-#include "utils.h" // some generic utilities (data types, etc)
-#include "config.h" // my custom parameter setup for this chip
-#include "can.h" // my custom can bus setup and API functions
+#include <xc.h>
+#include "config.h"
+#include "utils.h"
+#include "can.h"
 
-boolean buttonPressed = FALSE;
+#define BAUD_RATE 50 // speed in kbps
+#define CPU_SPEED 16 // speed in MHz
+
+/** 
+ * These should be constants really (written and read from EEPROM)
+ */
+
+boolean suppressSwitch = FALSE;
+int hearbeatTimeout = 300; // 5 * 60 sec = 5 minutes
+byte nodeID = 0b10101010;
+
+/**
+ * These are control variables used by the main loop
+ */
+
+boolean switchPressed = FALSE;
 boolean timerElapsed = FALSE;
 int seconds = 0;
-int hearbeatTimeout = 300; // 5 * 60 sec = 5 minutes, TODO configurable?
+
 
 /*
- * Input and timer setup
+ * Setup section
  */
 
 void configureInput() {
     // only configure B ports - since only B7:B4 have the interrupt on change feature, we need that...
     // so we configure B5 only (since B6 and B7 also have PGC and PGD that we need for debugging)
     // all other shared functionality on the pin is disabled by default, so no need to override anything
-    TRISBbits.TRISB5 = 1; // avoid setting other TRIS bits on B since CAN also needs that and did already set it up before
+    TRISBbits.TRISB5 = 1; // avoid setting other TRIS bits on B since configure can was already called before and sets that
     // enable port change interrupt in B
     INTCONbits.RBIE = 1;
     // enable weak pull ups (only for the enabled input)
@@ -51,6 +66,14 @@ void configureInterrupts() {
     configureTimer();
 }
 
+void configureCan() {
+    // TRIS3 = CAN BUS RX = has to be set as INPUT, all others as outputs (we assume we are the first to setup whole TRISB here)
+    TRISB = 0b00001000;
+
+    // loopback for now for testing
+    can_init(BAUD_RATE, CPU_SPEED, LOOPBACK_MODE);
+}
+
 /*
  * Input and timer processing
  */
@@ -58,7 +81,7 @@ void configureInterrupts() {
 void onInputChange() {
     // now confirm the PORT B is low (so we only notify on change from high to low)
     if (PORTBbits.RB5 == 0) {
-        buttonPressed = TRUE; // and change the flag to let the main thread handle this message
+        switchPressed = TRUE; // and change the flag to let the main thread handle this message
     }
     INTCONbits.RBIF = 0; // clear the interrupt
 }
@@ -86,21 +109,25 @@ void interrupt handleInterrupt(void) {
     }
 }
 
+void sendCanMessage(MessageType messageType) {
+    CanMessage message;
+    message.isSwitchOn = switchPressed;
+    message.messageID = nodeID;
+    message.messageType = messageType;
+    can_send(&message);
+}
+
 int main(void) {
     configureCan();
     configureInterrupts();
 
-    // testing only
-    unsigned char testChar[] = "12345678";
-    sendCanMessage(0b10001110001, testChar);
-    
     while (1) {
-        if (buttonPressed) {
-            // TODO send CAN message (get all data you can - error registers, current B5 in PORTB, uptime, etc)
-            buttonPressed = FALSE; // clear the flag
+        if (!suppressSwitch && switchPressed) {
+            sendCanMessage(NORMAL);
+            switchPressed = FALSE; // clear the flag
         }
         if (timerElapsed) {
-            // TODO send CAN hearbeat message (maybe the same as above?)
+            sendCanMessage(HEARTBEAT);
             timerElapsed = FALSE;
         }
     }
@@ -108,3 +135,7 @@ int main(void) {
     return 0;
 }
 
+// TODO: EEPROM data (or maybe flash since these should be pretty much constants really, but should survive restart)
+// 1) ID of this NODE (read it on startup) - 8 bits only - 1st bit should be the floor, so leaves us with 127 nodes per floor
+// 2) suppress switch flag
+// 3) Heartbeat timeout

@@ -16,6 +16,8 @@ typedef unsigned char boolean;
 #define TRUE 1
 #define FALSE 0
 
+typedef unsigned char byte;
+
 #ifdef	__cplusplus
 }
 #endif
