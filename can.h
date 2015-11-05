@@ -27,19 +27,21 @@ typedef enum {
 } MessageType;
     
 /**
+ * CanHeader structure - holds the header information used to wrap information needed to generate can IDs.
+ */
+typedef struct {
+     /** the message ID - 8 bits only in this application, other 3 as part of the final can ID are used to encode other information  */
+     byte nodeID;
+          
+     /** type of the message to be sent/received  */
+     MessageType messageType;
+} CanHeader;
+
+/**
  * CanMessage structure - main structure for sending CAN traffic over
  */
 typedef struct {
-     
-     /*
-      * The below will become part of the can ID sent as part of this CAN message (custom protocol)
-      */
-
-     /** the message ID - 8 bits only in this application, other 3 as part of the final can ID are used to encode other information  */
-     byte messageID;
-          
-     /** type of the message to be sent  */
-     MessageType messageType;
+     CanHeader *header;
 
      /*
       * The below will become part of the data payload sent as part of this CAN message (custom protocol)
@@ -61,26 +63,28 @@ typedef struct {
 } Mode;
 
 /**
- * Initialize the CAN stack protocol according to the data sheet, see below:
+ * Sets operational mode of CAN chip
  * 
- * Initial LAT and TRIS bits for RX and TX CAN.
- * Ensure that the ECAN module is in Configuration mode.
- * Select ECAN Operational mode.
- * Set up the Baud Rate registers.
- * Set up the Filter and Mask registers.
- * Set the ECAN module to normal mode or any
- * other mode required by the application logic.
- * 
- * In normal mode, the CAN module automatically over-
- * rides the appropriate TRIS bit for CANTX. The user
- * must ensure that the appropriate TRIS bit for CANRX
- * is set.
+ * @param mode mode to set
+ * @param waitForSwitch whether a wait should be performed to assert the move to that mode
+ */
+void can_setMode(Mode mode, boolean waitForSwitch);
 
+/**
+ * Sets up baud rate of CAN chip
+ * 
  * @param baudRate the baud rate to use (in kbits per seond). Max is 500 (the implementation uses 16TQ for the bit sequencing)
  * @param cpuSpeed speed of the clock in MHz (mind that PLL settings in registers may affect this)
- * @param mode new mode to use
  */
- void can_init(int baudRate, int cpuSpeed, Mode mode);
+void can_setupBaudRate(int baudRate, int cpuSpeed);
+
+ /**
+  * Setup receive filter based on the in passed CanHeader - to receive only can messages for that header. This method will setup
+  * a single mask only checking all bits to be equal.
+  * 
+  * @param header wrapper for the CanHeader - the filter will be setup to match the relevant can messages only
+  */
+void can_setupStrictReceiveFilter(CanHeader *header);
  
 /**
  * Attempts to send the message using TXB0 register (not using any others right now)

@@ -70,28 +70,53 @@ void configureCan() {
     // TRIS3 = CAN BUS RX = has to be set as INPUT, all others as outputs (we assume we are the first to setup whole TRISB here)
     TRISB = 0b00001000;
 
-    // loopback for now for testing
-    can_init(BAUD_RATE, CPU_SPEED, LOOPBACK_MODE);
+    // first move to CONFIG mode (and wait for the switch to finish)
+    can_setMode(CONFIG_MODE, TRUE);
+
+    can_setupBaudRate(BAUD_RATE, CPU_SPEED);
+    
+    // now setup CAN to receive only CONFIG message types for this node ID
+    CanHeader header;
+    header.nodeID = nodeID;
+    header.messageType = CONFIG;
+    can_setupStrictReceiveFilter(&header);
+
+    // switch CAN to loopback for now for testing, don't wait for the switch to finish
+    can_setMode(LOOPBACK_MODE, FALSE);
 }
 
 /*
  * Input and timer processing
  */
 
-void onInputChange() {
-    // now confirm the PORT B is low (so we only notify on change from high to low)
-    if (PORTBbits.RB5 == 0) {
-        switchPressed = TRUE; // and change the flag to let the main thread handle this message
+void checkInputChanged() {
+    // check if port B change interrupt is enabled and interrupt flag set
+    if (INTCONbits.RBIE && INTCONbits.RBIF) {
+        // now confirm the PORT B is low (so we only notify on change from high to low)
+        if (PORTBbits.RB5 == 0) {
+            switchPressed = TRUE; // and change the flag to let the main thread handle this message
+        }
+        INTCONbits.RBIF = 0; // clear the interrupt
     }
-    INTCONbits.RBIF = 0; // clear the interrupt
 }
 
-void onTimer() {
-    if (++seconds >= hearbeatTimeout) {
-        seconds = 0;
-        timerElapsed = TRUE;
+void checkTimerExpired() {
+    // check if timer 0 interrupt is enabled and interrupt flag set
+    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {    
+        if (++seconds >= hearbeatTimeout) {
+            seconds = 0;
+            timerElapsed = TRUE;
+        }
+        INTCONbits.TMR0IF = 0; // clear the interrupt
     }
-    INTCONbits.TMR0IF = 0; // clear the interrupt
+}
+
+void checkCanMessageReceived() {
+    // check if CAN receive buffer 0 interrupt is enabled and interrupt flag set
+    if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {    
+        // TODO implement CAN config messages - e.g. change heartbeat timeout, node ID or suppress flag
+        PIR5bits.RXB0IF = 0; // clear the interrupt
+    }    
 }
 
 /**
@@ -99,21 +124,19 @@ void onTimer() {
  * Or sends a heartbeat message if the timer occurred otherwise
  */
 void interrupt handleInterrupt(void) {
-    // check if port B change interrupt is enabled and interrupt flag set
-    if (INTCONbits.RBIE && INTCONbits.RBIF) {
-        onInputChange();
-    }
-    // check if timer 0 interrupt is enabled and interrupt flag set
-    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {
-        onTimer();
-    }
+    checkTimerExpired();
+    checkInputChanged();
+    checkCanMessageReceived();
 }
 
 void sendCanMessage(MessageType messageType) {
+    CanHeader header;
+    header.nodeID = nodeID;
+    header.messageType = messageType;
+    
     CanMessage message;
+    message.header = &header;
     message.isSwitchOn = switchPressed;
-    message.messageID = nodeID;
-    message.messageType = messageType;
     can_send(&message);
 }
 
@@ -134,8 +157,3 @@ int main(void) {
     
     return 0;
 }
-
-// TODO: EEPROM data (or maybe flash since these should be pretty much constants really, but should survive restart)
-// 1) ID of this NODE (read it on startup) - 8 bits only - 1st bit should be the floor, so leaves us with 127 nodes per floor
-// 2) suppress switch flag
-// 3) Heartbeat timeout

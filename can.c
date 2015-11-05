@@ -13,6 +13,27 @@
 #include "utils.h"
 #include "can.h"
 
+/*
+ * Internal methods here
+ */
+
+/**
+ * Translate the can header to an integer (only low 11 bits should be set)
+ * 
+ * @param header can header to translate
+ * @return canID (11 bit integer)
+ */
+int translateCanHeader(CanHeader *header) {
+    // high byte is set to equal to message type - should be 3 bits only, so highest 5 bits will be 0 anyway
+    // low byte = the node ID directly
+    // high bits are set to message type on purpose to ease filtering - make sure the highest bits are filtered easily
+    return (header->messageType << 8) + header->nodeID;
+}
+
+/*
+ * Public API here
+ */
+
 void can_setMode(Mode mode, boolean waitForSwitch) {
     CANCONbits.REQOP = mode;
     // if wait was required, then wait until we are in configuration mode (it may take a few cycles according to datasheet)
@@ -35,21 +56,24 @@ void can_setupBaudRate(int baudRate, int cpuSpeed) {
     BRGCON3 = 0b00000010;
 }
 
-/*
- * Public API goes here
- */
-
-void can_init(int baudRate, int cpuSpeed, Mode mode) {
-    can_setMode(CONFIG_MODE, TRUE);
-
-    // no need to configure ECAN registers - mode legacy by default
-    // CIOCON is probably OK too (CAN IO register)
-    can_setupBaudRate(baudRate, cpuSpeed);
-    // TODO Set up the Filter and Mask registers (not needed for now)
-
-    // now switch CAN BUS required mode
-    // do not wait for the mode to actually switch here (only config mode is probably required to follow that)
-    can_setMode(mode, FALSE);
+void can_setupStrictReceiveFilter(CanHeader *header) {
+    // setup just 1 acceptance filter to only accept CAN message for the in passed header information
+    int canID = translateCanHeader(header);
+    RXF0SIDH = (canID & 0b11111111000) >> 3; // take highest 8 bits as a byte
+    // take 3 bits only and set as high bits inside low byte register 
+    // this also sets EXIDEN bit to 0 to only accept standard IDs (no extended ones)
+    RXF0SIDL = (canID & 0b111) << 5;
+    // now enable only this filter
+    RXFCON0bits.RXF0EN = 1;
+    
+    // now setup the strict mask -- all high 11 bits are the canID, rest is EXIDEN bits and others unused in legacy mode
+    RXM0SIDH = 0b11111111;
+    // first 3 bits finish the canID, the 5th bit sset EXIDEN to 1 - use the same value of EXIDEN as in the corresponding filter
+    RXM0SIDL = 0b11101000;
+    
+    // ignore buffer overflows here - we really only want to receive this 1 strict message, which is unlikely to happen often
+    // now enable the interrupts to receive CAN messages in buffer 0
+    PIE5bits.RXB0IE = 1;
 }
 
 void can_send(CanMessage *canMessage) {
@@ -61,17 +85,20 @@ void can_send(CanMessage *canMessage) {
     }
     // confirm nothing is in the transmit register yet (previous can message sent)    
     while (TXB0CONbits.TXREQ);
-    // set TXB0SIDH (first 8 bits of standard ID) by simply using the message ID itself
-    TXB0SIDH = canMessage->messageID;
-    // and now take the message type as 3 bits and set first 3 high bits in the TXB0SIDL register (remainder of the canID)
-    TXB0SIDL = canMessage->messageType << 5;
+    
+    int canID = translateCanHeader(canMessage->header);
+    TXB0SIDH = (canID & 0b11111111000) >> 3; // take highest 8 bits as a byte
+    // take 3 bits only and set as high bits inside low byte register 
+    // this also sets EXIDEN bit to 0 to only accept standard IDs (no extended ones)
+    TXB0SIDL = (canID & 0b111) << 5;
 
-    // TXB0DLC - last 4 bits should contain data length - equal to 2 now (1 byte is enough for the 1 bit only so far + 1 byte more for error count)
-    TXB0DLC = 2;
+    // TXB0DLC - last 4 bits should contain data length - equal to 3 now (1 byte is enough for the 1 bit only so far + few more byte more for error counts)
+    TXB0DLC = 3;
 
     // now populate TXB0DX data registers
     TXB0D0 = canMessage->isSwitchOn << 7; // 1st bit of the 1st byte only
-    TXB0D1 = TXERRCNT; // whole 2nd byte = CAN error count read from the register
+    TXB0D1 = TXERRCNT; // whole 2nd byte = CAN transmit error count read from the register
+    TXB0D2 = RXERRCNT; // whole 3nd byte = CAN receive error count read from the register
     
     // request transmitting the message (setting the special bit)
     TXB0CONbits.TXREQ = 1; 
