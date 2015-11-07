@@ -1,14 +1,4 @@
 
-/* 
- * Main CAN interface source file. 
- * Implemented from PIC18F2XKXX datasheet, so could work for other chips too (assuming xc.h is included in your main file prior to this one)
- * 
- * File:   can.c
- * Author: pojd
- *
- * Created on October 31, 2015, 10:19 PM
- */
-
 #include <xc.h>
 #include "utils.h"
 #include "can.h"

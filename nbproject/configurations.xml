@@ -17,6 +17,8 @@
       <itemPath>can.h</itemPath>
       <itemPath>utils.h</itemPath>
       <itemPath>can.c</itemPath>
+      <itemPath>dao.c</itemPath>
+      <itemPath>dao.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

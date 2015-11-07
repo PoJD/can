@@ -12,6 +12,7 @@
 #include "config.h"
 #include "utils.h"
 #include "can.h"
+#include "dao.h"
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
@@ -21,16 +22,22 @@
  */
 
 boolean suppressSwitch = FALSE;
-int hearbeatTimeout = 300; // 5 * 60 sec = 5 minutes
+int heartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
 byte nodeID = 0b10101010;
 
 /**
  * These are control variables used by the main loop
  */
 
+/** was the switch pressed? */
 boolean switchPressed = FALSE;
+
+/** timer data */
 boolean timerElapsed = FALSE;
 int seconds = 0;
+
+/** config data - if a config CAN message was sent */
+int configData = 0;
 
 
 /*
@@ -85,6 +92,11 @@ void configureCan() {
     can_setMode(LOOPBACK_MODE, FALSE);
 }
 
+void configure() {
+    configureCan();
+    configureInterrupts();
+}
+
 /*
  * Input and timer processing
  */
@@ -103,7 +115,7 @@ void checkInputChanged() {
 void checkTimerExpired() {
     // check if timer 0 interrupt is enabled and interrupt flag set
     if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {    
-        if (++seconds >= hearbeatTimeout) {
+        if (++seconds >= heartbeatTimeout) {
             seconds = 0;
             timerElapsed = TRUE;
         }
@@ -113,8 +125,14 @@ void checkTimerExpired() {
 
 void checkCanMessageReceived() {
     // check if CAN receive buffer 0 interrupt is enabled and interrupt flag set
-    if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {    
-        // TODO implement CAN config messages - e.g. change heartbeat timeout, node ID or suppress flag
+    if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
+        // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
+        if (RXB0CONbits.RXFUL) {
+            // we can only receive config messages, so no need to check what canID did we get
+            // form a 16bit int from the 2 incoming bytes and let the main thread process this message then (let the interrupt finish quickly)
+            configData = (RXB0D0 << 8) + RXB0D1;
+            RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
+        }
         PIR5bits.RXB0IF = 0; // clear the interrupt
     }    
 }
@@ -129,6 +147,26 @@ void interrupt handleInterrupt(void) {
     checkCanMessageReceived();
 }
 
+/*
+ * Action methods here
+ */
+
+void updateConfigData(DataItem *data) {
+    switch (data->dataType) {
+        case HEARTBEAT_TIMEOUT:
+            heartbeatTimeout = data->value;
+            break;
+        case SUPPRESS_SWITCH:
+            suppressSwitch = data->value;
+            break;
+        case NODE_ID:
+            nodeID = data->value;
+            // in this case we also need to configure again to change CAN acceptance filters, etc
+            configure();
+            break;            
+    }
+}
+
 void sendCanMessage(MessageType messageType) {
     CanHeader header;
     header.nodeID = nodeID;
@@ -140,18 +178,27 @@ void sendCanMessage(MessageType messageType) {
     can_send(&message);
 }
 
+/**
+ * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
+ */
 int main(void) {
-    configureCan();
-    configureInterrupts();
+    configure();
 
-    while (1) {
-        if (!suppressSwitch && switchPressed) {
-            sendCanMessage(NORMAL);
-            switchPressed = FALSE; // clear the flag
+    while (TRUE) {
+        if (switchPressed) {
+            if (!suppressSwitch) {
+                sendCanMessage(NORMAL);
+            }
+            switchPressed = FALSE;
         }
         if (timerElapsed) {
             sendCanMessage(HEARTBEAT);
             timerElapsed = FALSE;
+        }
+        if (configData) {
+            DataItem data = dao_saveDataItem(configData);
+            updateConfigData(&data);
+            configData = 0;
         }
     }
     
