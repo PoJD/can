@@ -77,7 +77,7 @@ void can_send(CanMessage *canMessage) {
     while (TXB0CONbits.TXREQ);
     
     int canID = translateCanHeader(canMessage->header);
-    TXB0SIDH = (canID & 0b11111111000) >> 3; // take highest 8 bits as a byte
+    TXB0SIDH = (canID >> 3) & MAX_8_BITS; // take highest 8 bits as a byte
     // take 3 bits only and set as high bits inside low byte register 
     // this also sets EXIDEN bit to 0 to only accept standard IDs (no extended ones)
     TXB0SIDL = (canID & 0b111) << 5;

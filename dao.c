@@ -6,19 +6,26 @@
  */
 
 /**
+ * Performs a 1 cycle operation (no operation).
+ */
+void noop() {
+    asm("NOP");
+}
+
+/**
  * Parse the given 16 bit integer into the instance of dataItem
  * 
  * @param data 16bit integer to parse
  * @return Data instance
  */
-DataItem dao_parseData(int data) {
-    // first 8 bits = dataType, the other 8 bits = data itself
-    DataType dataType = data >> 8;
-    byte byteData = 0b11111111 & data; // take 8 lowest bits only
+DataItem dao_parseData(unsigned int data) {
+    // first 2 bits = dataType, the other 14 bits = data itself
+    DataType dataType = data >> 14;
+    unsigned int intData = MAX_14_BITS & data; // take 14 lowest bits only
 
     DataItem dataItem;
     dataItem.dataType = dataType;
-    dataItem.value = byteData;
+    dataItem.value = intData;
     return dataItem; // return copy, not a reference
 }
 
@@ -31,43 +38,16 @@ void dao_setupEeprom(DataType dataType) {
     // write to EEPROM, write only, rest are flags cleared by us this way
     EECON1 = 0;
     
-    // we have 10bits of data (1024 bytes), it is enough to only use the lower 6 bits though, we only need 1 byte per each dataType
+    // we have 10bits of data (1024 bytes), it is enough to only use the lower 8 bits though, we only need a few bytes per each dataType
+    // each datatype would use 2 bytes of data - so 16bits top (in fact not more than 14bits though)
     EEADRH = 0;
-    EEADR = dataType;
+    EEADR = dataType << 1;
 }
 
 /**
- * Performs a 1 cycle operation (no operation).
+ * Writes the pre-prepared byte of data out to the storage and waits for the hardware to finish writing it
  */
-void noop() {
-    asm("NOP");
-}
-
-/*
- * Public API
- */
-
-boolean dao_isValid (DataItem *dataItem) {
-    // this assumes the data will be 0 if unset
-    if (dataItem->dataType == HEARTBEAT_TIMEOUT || dataItem->dataType == NODE_ID) {
-        return dataItem->value ? TRUE : FALSE;
-    }
-    return TRUE;
-}
-
-
-DataItem dao_saveDataItem (int data) {
-    DataItem dataItem = dao_parseData(data);
-    // always disable interrupts during EEPROM write
-    di();
-    
-    dao_setupEeprom(dataItem.dataType);
-
-    // now enable write to EEPROM
-    EECON1bits.WREN = 1;
-    
-    EEDATA = dataItem.value; // prepare data to be written
-    
+void dao_writeByte() {
     // initiate write now
     EECON2 = 0x55;
     EECON2 = 0xAA;
@@ -77,8 +57,54 @@ DataItem dao_saveDataItem (int data) {
     while(EECON1bits.WR);
     // clear the interrupt flag (not enabled handling it anyway, must be cleared according to datasheet)
     PIR4bits.EEIF = 0;
+}
+
+/**
+ * Reads next byte from the storage assuming all the registers were setup properly in order to do so (address, etc)
+ */
+byte dao_readByte() {
+    EECON1bits.RD = 1; // request read bit
+    noop(); // wait 1 cycle
+    return EEDATA; // and now read the data
+}
+
+/*
+ * Public API
+ */
+
+boolean dao_isValid (DataItem *dataItem) {
+    if (dataItem->value == INVALID_VALUE) {
+        return FALSE;
+    }
+
+    // in addition to that heartbeat and node ID cannot be 0
+    if (dataItem->dataType == HEARTBEAT_TIMEOUT || dataItem->dataType == NODE_ID) {
+        return dataItem->value ? TRUE : FALSE;
+    }
+    return TRUE;
+}
+
+
+DataItem dao_saveDataItem (unsigned int data) {
+    DataItem dataItem = dao_parseData(data);
+    // always disable interrupts during EEPROM write
+    di();
     
-    // and disable write to EEPROM
+    dao_setupEeprom(dataItem.dataType);
+
+    // now enable write to EEPROM
+    EECON1bits.WREN = 1;
+    
+    // first write 8 higher bits of the value
+    EEDATA = dataItem.value >> 8;
+    dao_writeByte();
+    
+    // now lower 8 bits of the value
+    EEADR ++;
+    EEDATA = MAX_8_BITS & dataItem.value;
+    dao_writeByte();
+
+    // now disable write to EEPROM
     EECON1bits.WREN = 0;
     
     // now enable interrupts again
@@ -96,13 +122,12 @@ DataItem dao_loadDataItem(DataType dataType) {
     
     dao_setupEeprom(dataType);
     
-    // initiate read now
-    EECON1bits.RD = 1;
-
-    // wait 1 cycle
-    noop();
-    // and read the data
-    result.value = EEDATA;
+    // now read high 8 bits of data (first two should always be 0 though since we only could store 14bits of data)
+    result.value = dao_readByte() << 8;
+    
+    // now move the address and initiate another read to get the 8 lower bits
+    EEADR ++;
+    result.value += dao_readByte();
     
     // now enable interrupts again
     ei();
