@@ -20,13 +20,13 @@ extern "C" {
  * Core type of data.
  */
 typedef enum {
-    /** should the switch be suppressed? (i.e. no CAN message should be sent when this is true?) */
-    SUPPRESS_SWITCH = 0,
-    /** hearbeat timeout in seconds */
-    HEARTBEAT_TIMEOUT = 1,
     /** id of the node. Note that this way (by passing a config message with NODE_ID) this chip node_id is changed.
          So the same message would not be processed by this node anymore since it won't listen to that traffic anymore */
-    NODE_ID = 2
+    NODE_ID = 0,
+    /** should the switch be suppressed? (i.e. no CAN message should be sent when this is true?) */
+    SUPPRESS_SWITCH = 1,
+    /** hearbeat timeout in seconds */
+    HEARTBEAT_TIMEOUT = 2
 } DataType;
 
 /**
@@ -36,6 +36,13 @@ typedef struct {
     DataType dataType;
     byte value; // up to 8 bits to hold the data itself
 } DataItem;
+
+/**
+ * Detects whether the in-passed data item is valid or not
+ * @param dataItem data item to check
+ * @return true if valid, false otherwise
+ */
+boolean dao_isValid (DataItem *dataItem);
 
 /**
  * Save data item into the storage.

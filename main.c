@@ -23,7 +23,7 @@
 
 boolean suppressSwitch = FALSE;
 int heartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
-byte nodeID = 0b10101010;
+byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /**
  * These are control variables used by the main loop
@@ -152,19 +152,45 @@ void interrupt handleInterrupt(void) {
  */
 
 void updateConfigData(DataItem *data) {
-    switch (data->dataType) {
-        case HEARTBEAT_TIMEOUT:
-            heartbeatTimeout = data->value;
-            break;
-        case SUPPRESS_SWITCH:
-            suppressSwitch = data->value;
-            break;
-        case NODE_ID:
-            nodeID = data->value;
-            // in this case we also need to configure again to change CAN acceptance filters, etc
-            configure();
-            break;            
+    if (dao_isValid(data)) {
+        switch (data->dataType) {
+            case HEARTBEAT_TIMEOUT:
+                heartbeatTimeout = data->value;
+                break;
+            case SUPPRESS_SWITCH:
+                suppressSwitch = data->value;
+                break;
+            case NODE_ID:
+                nodeID = data->value;
+                // in this case we also need to configure again to change CAN acceptance filters, etc
+                configure();
+                break;            
+        }
     }
+}
+
+/**
+ * Reads initial values from DAO and sets the config variables accordingly.
+ * @return TRUE if all mandatory values were read OK, false otherwise
+ */
+boolean initConfigData() {
+    // try nodeID, which is mandatory. If it is not set, then return false
+    DataItem dataItem = dao_loadDataItem(NODE_ID);
+    if (!dao_isValid(&dataItem)) {
+        return FALSE;
+    }
+    updateConfigData (&dataItem);
+    
+    // other attributes are not mandatory
+    
+    dataItem = dao_loadDataItem(HEARTBEAT_TIMEOUT);
+    updateConfigData (&dataItem);
+
+    // even if not written before, reading as 0 is fine and we will treat it as disabled by default
+    dataItem = dao_loadDataItem(SUPPRESS_SWITCH);
+    updateConfigData (&dataItem);
+    
+    return TRUE;
 }
 
 void sendCanMessage(MessageType messageType) {
@@ -182,8 +208,16 @@ void sendCanMessage(MessageType messageType) {
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
  */
 int main(void) {
+    // find out some initial values to use to configure this node
+    // some are mandatory and refuse to startup if these are not set
+    if (!initConfigData()) {
+        return -1;
+    }
+    
+    // all OK, so start up
     configure();
 
+    // main loop
     while (TRUE) {
         if (switchPressed) {
             if (!suppressSwitch) {
