@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+#include "utils.h"
+    
 /**
  * Core type of data.
  */
@@ -31,8 +33,8 @@ typedef enum {
  * Core Data Item structure - wraps some data item (i.e. type and value)
  */
 typedef struct {
-    DataType dataType; // first 2 highest bits
-    int value; // up to 14 bits to hold the data itself
+    DataType dataType;
+    byte value; // up to 8 bits to hold the data itself
 } DataItem;
 
 /**

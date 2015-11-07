@@ -38,7 +38,7 @@ void can_setupBaudRate(int baudRate, int cpuSpeed) {
 
     // BRGCON1 = first 2 bits as 0 = SJW 1, last 6 bits are BRP, so mask first two bits of BRP (to make SJW 00)
     int BRP = (int)(1000*cpuSpeed)/(int)(32*baudRate) -1;
-    BRGCON1 = BRP & 0b00111111;
+    BRGCON1 = BRP & 0b111111;
     
     // phase 2 segment programmable (1), sampled once (0), 3 bits for phase seg 1 (8=111), 3 bits for propagation time (4=011)
     BRGCON2 = 0b10111011;
@@ -49,7 +49,7 @@ void can_setupBaudRate(int baudRate, int cpuSpeed) {
 void can_setupStrictReceiveFilter(CanHeader *header) {
     // setup just 1 acceptance filter to only accept CAN message for the in passed header information
     int canID = translateCanHeader(header);
-    RXF0SIDH = (canID & 0b11111111000) >> 3; // take highest 8 bits as a byte
+    RXF0SIDH = canID >> 3; // take highest 8 bits as a byte
     // take 3 bits only and set as high bits inside low byte register 
     // this also sets EXIDEN bit to 0 to only accept standard IDs (no extended ones)
     RXF0SIDL = (canID & 0b111) << 5;

@@ -11,13 +11,13 @@
  * @return Data instance
  */
 DataItem dao_parseData(int data) {
-    // highest 2 bits = dataType, the rest = data itself
-    DataType dataType = (0b1100000000000000 & data) >> 14;
-    int intData = 0b11111111111111 & data; // drop 2 highest bits only
+    // first 8 bits = dataType, the other 8 bits = data itself
+    DataType dataType = data >> 8;
+    byte byteData = 0b11111111 & data; // take 8 lowest bits only
 
     DataItem dataItem;
     dataItem.dataType = dataType;
-    dataItem.value = intData;
+    dataItem.value = byteData;
     return dataItem; // return copy, not a reference
 }
 
