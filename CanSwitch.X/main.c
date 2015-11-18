@@ -181,6 +181,11 @@ boolean initConfigData() {
     }
     updateConfigData (&dataItem);
     
+    // now also use the nodeID as the number of seconds already passed from the timer
+    // helps avoiding burst of heartbeat messages from all can switches on the network at the same time
+    // they should evenly split by a second as a result of this
+    seconds = nodeID;
+    
     // other attributes are not mandatory
     
     dataItem = dao_loadDataItem(HEARTBEAT_TIMEOUT);
