@@ -28,3 +28,15 @@ Key features:
 
 * invoke setupCanSwitch (nodeId) to setup EEPROM of the chip as the CanSwitch
 * invoke setupCanRelay (bit floor) to setup EEPROM of the chip as the CanRelay
+
+### CanRelay.X
+This project is the can relay implementation. The chips programmed this way are planned to be installed on a PCB directly controlling the relays for lights.
+Key features:
+
+* Registers for all NORMAL messages for a given floor (the floor has to be setup in EEPROM first)
+* For a given normal message, it would ignore the first bit and treat the rest as the counter of port to switch on.
+
+#### Mapping of ports
+* 1-7 toggles PORTA1..PORTA7
+* 8-16 toggles PORTB1..PORTB7
+* 17-24 toggles PORTC1..PORTC7
