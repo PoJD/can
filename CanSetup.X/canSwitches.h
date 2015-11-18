@@ -48,7 +48,7 @@ typedef enum {
 
 typedef enum {
     GROUND = 0,
-    FIRST = 1
+    FIRST = 0b10000000
 } Floor;
 
 #ifdef	__cplusplus

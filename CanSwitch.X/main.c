@@ -48,7 +48,7 @@ void configureInput() {
     // only configure B ports - since only B7:B4 have the interrupt on change feature, we need that...
     // so we configure B5 only (since B6 and B7 also have PGC and PGD that we need for debugging)
     // all other shared functionality on the pin is disabled by default, so no need to override anything
-    TRISBbits.TRISB5 = 1; // avoid setting other TRIS bits on B since configure can was already called before and sets that
+    TRISB = 0b00100000;
     // enable port change interrupt in B
     INTCONbits.RBIE = 1;
     // enable weak pull ups (only for the enabled input)
@@ -68,15 +68,13 @@ void configureTimer() {
 void configureInterrupts() {
     RCONbits.IPEN = 0; // disable priority interrupts
     INTCONbits.GIE = 1; // enable all global interrupts
+    INTCONbits.PEIE = 1; // enable peripheral interrupts
 
     configureInput();
     configureTimer();
 }
 
 void configureCan() {
-    // TRIS3 = CAN BUS RX = has to be set as INPUT, all others as outputs (we assume we are the first to setup whole TRISB here)
-    TRISB = 0b00001000;
-
     // first move to CONFIG mode (and wait for the switch to finish)
     can_setMode(CONFIG_MODE, TRUE);
 
@@ -93,8 +91,8 @@ void configureCan() {
 }
 
 void configure() {
-    configureCan();
     configureInterrupts();
+    configureCan();
 }
 
 /*
