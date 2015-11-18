@@ -70,13 +70,13 @@ void configure() {
 
 void switchOutput(byte nodeID) {
     // simply go for 1-8 - PORTA, 9-16 - PORTB, 17-24 - PORTC
-    // need to flip the respective bit
+    // need to flip the respective bit - shift by 0 up to 7 bits
     if (nodeID>0 && nodeID<=8) { // PORTA
-        PORTA ^= 1 << nodeID;
+        PORTA ^= 1 << (nodeID -1);
     } else if (nodeID>8 && nodeID<=16) { // PORTB
-        PORTB ^= 1 << (nodeID-8);
+        PORTB ^= 1 << (nodeID-9);
     } else if (nodeID>16 && nodeID<=24) { // PORTC
-        PORTC ^= 1 << (nodeID-16);
+        PORTC ^= 1 << (nodeID-17);
     }
 }
 
