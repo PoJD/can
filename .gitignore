@@ -3,3 +3,5 @@ debug
 dist
 
 Makefile-genesis.properties
+/CanSwitch.X/nbproject/private/
+/CanSetup.X/nbproject/private/

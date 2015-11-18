@@ -230,7 +230,7 @@ int main(void) {
             timerElapsed = FALSE;
         }
         if (configData) {
-            DataItem data = dao_saveDataItem(configData);
+            DataItem data = dao_saveData(configData);
             updateConfigData(&data);
             configData = 0;
         }
