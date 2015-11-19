@@ -15,14 +15,14 @@
 #include "dao.h"
 
 #define BAUD_RATE 50 // speed in kbps
-#define CPU_SPEED 16 // speed in MHz
+#define CPU_SPEED 4 // speed in MHz
 
 /** 
  * These should be constants really (written and read from EEPROM)
  */
 
 boolean suppressSwitch = FALSE;
-int heartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
+int heartbeatTimeout = 10; // 5 * 60 sec = 5 minutes
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /**
@@ -44,6 +44,12 @@ int configData = 0;
  * Setup section
  */
 
+void configureSpeed() {
+    // setup 16MHz oscillator first (disable PLL - 1st bit, then 4 bits setup speed)
+    // so effective CPU_SPEED is therefore 4MHz
+    OSCCON = 0b01111000;
+}
+
 void configureInput() {
     // only configure B ports - since only B7:B4 have the interrupt on change feature, we need that...
     // so we configure B5 only (since B6 and B7 also have PGC and PGD that we need for debugging)
@@ -56,9 +62,10 @@ void configureInput() {
 }
 
 void configureTimer() {
-    // enable timer, internal clock, use prescaler 1:256 (last 3 bits below)
-    // as a result we have 2*16 * 256 = 16mil cycles = the speed of the CPU, so we should see an interrupt each second
-    T0CON = 0b10000111;
+    // enable timer, internal clock, use prescaler 1:64 (last 3 bits below)
+    // so we have 2^16 * 64 = 4mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
+    // we have 16mil oscillator cycles each second, so we should see an interrupt each second
+    T0CON = 0b10000101;
     // enable timer interrupts
     INTCONbits.TMR0IE = 1;
 }
@@ -91,6 +98,7 @@ void configureCan() {
 }
 
 void configure() {
+    configureSpeed();
     configureInterrupts();
     configureCan();
 }
