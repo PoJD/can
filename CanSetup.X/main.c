@@ -5,6 +5,9 @@
  * Created on November 18, 2015, 2:18 PM
  */
 
+#include <stdio.h>
+
+#include "config.h"
 #include "canSwitches.h"
 #include "dao.h"
 
@@ -16,6 +19,9 @@ void setupCanSwitch(CanSwitchNode node) {
     dataItem.dataType = NODE_ID;
     dataItem.value = node;
     dao_saveDataItem(&dataItem);
+    
+    DataItem dataOut = dao_loadDataItem(NODE_ID);    
+    printf("Data: %d", dataOut.value);
 }
 /*
  * Sets up EEPROM of this node as a canRelay - using the floor passed in to be set as FLOOR for CanRelay project
@@ -24,7 +30,7 @@ void setupCanRelay(Floor floor) {
     DataItem dataItem;
     dataItem.dataType = FLOOR;
     dataItem.value = floor;
-    dao_saveDataItem(&dataItem);
+    dao_saveDataItem(&dataItem);    
 }
 
 int main(void) {
@@ -32,7 +38,7 @@ int main(void) {
     setupCanSwitch(GARAGE);
     
     // or setup as CanRelay for 1st floor
-    setupCanRelay(FIRST);
+    //setupCanRelay(FIRST);
     return 0;
 }
 
