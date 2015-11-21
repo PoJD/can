@@ -15,7 +15,7 @@
 #include "dao.h"
 
 #define BAUD_RATE 50 // speed in kbps
-#define CPU_SPEED 4 // speed in MHz
+#define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -82,8 +82,8 @@ void configureInterrupts() {
 }
 
 void configureCan() {
-    // first move to CONFIG mode (and wait for the switch to finish)
-    can_setMode(CONFIG_MODE, TRUE);
+    // first move to CONFIG mode
+    can_setMode(CONFIG_MODE);
 
     can_setupBaudRate(BAUD_RATE, CPU_SPEED);
     
@@ -93,8 +93,8 @@ void configureCan() {
     header.messageType = CONFIG;
     can_setupStrictReceiveFilter(&header);
 
-    // switch CAN to loopback for now for testing, don't wait for the switch to finish
-    can_setMode(LOOPBACK_MODE, FALSE);
+    // switch CAN to loopback for now for testing
+    can_setMode(LOOPBACK_MODE);
 }
 
 void configure() {
