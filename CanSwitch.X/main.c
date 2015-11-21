@@ -51,14 +51,31 @@ void configureSpeed() {
 }
 
 void configureInput() {
-    // only configure B ports - since only B7:B4 have the interrupt on change feature, we need that...
-    // so we configure B5 only (since B6 and B7 also have PGC and PGD that we need for debugging)
+    // only configure B ports - since only B3:B0 have the external interrupt change feature, we need that...
+    // so we configure B0 only 
     // all other shared functionality on the pin is disabled by default, so no need to override anything
-    TRISB = 0b00100000;
-    // enable port change interrupt in B
-    INTCONbits.RBIE = 1;
+    TRISB = 0b00000001;
+
+    // disable all analog inputs (set as digital)
+    ANCON0 = 0;
+    ANCON1 = 0;
+    
     // enable weak pull ups (only for the enabled input)
     INTCON2bits.RBPU = 0;
+    WPUBbits.WPUB0 = 1;
+    
+    // now wait some time for the above false triggers to sink in before enabling the interrupt below
+    for (byte i=0; i<5; i++) {
+        NOP();
+    }
+    
+    // now clear the interrupt flag (could be set on startup)
+    INTCONbits.INT0IF = 0;
+    
+    // interrupt on falling change (pull up keep it high, only interrupt on "key down")
+    INTCON2bits.INTEDG0 = 0;
+    // till now enable external interrupt 0 (PORTB0 change)
+    INTCONbits.INT0IE = 1;
 }
 
 void configureTimer() {
@@ -108,13 +125,10 @@ void configure() {
  */
 
 void checkInputChanged() {
-    // check if port B change interrupt is enabled and interrupt flag set
-    if (INTCONbits.RBIE && INTCONbits.RBIF) {
-        // now confirm the PORT B is low (so we only notify on change from high to low)
-        if (PORTBbits.RB5 == 0) {
-            switchPressed = TRUE; // and change the flag to let the main thread handle this message
-        }
-        INTCONbits.RBIF = 0; // clear the interrupt
+    // check if external input change is enabled and interrupt flag set (we know we will only be notified on falling edge)
+    if (INTCONbits.INT0IE && INTCONbits.INT0IF) {
+        switchPressed = TRUE; // and change the flag to let the main thread handle this message
+        INTCONbits.INT0IF = 0; // clear the interrupt
     }
 }
 
