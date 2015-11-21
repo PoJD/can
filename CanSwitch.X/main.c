@@ -22,7 +22,7 @@
  */
 
 boolean suppressSwitch = FALSE;
-int heartbeatTimeout = 10; // 5 * 60 sec = 5 minutes
+int heartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /**
@@ -110,8 +110,8 @@ void configureCan() {
     header.messageType = CONFIG;
     can_setupStrictReceiveFilter(&header);
 
-    // switch CAN to loopback for now for testing
-    can_setMode(LOOPBACK_MODE);
+    // switch CAN to normal mode (using real underlying CAN)
+    can_setMode(NORMAL_MODE);
 }
 
 void configure() {
