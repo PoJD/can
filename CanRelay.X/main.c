@@ -28,10 +28,13 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
  */
 
 void configureOutputs() {
-    // configure everything as output
+    // configure everything as output and set everything as 0 initially
     TRISA = 0;
     TRISB = 0;
     TRISC = 0;
+    PORTA = 0;
+    PORTB = 0;
+    PORTC = 0;
     
     // disable all analog inputs (set as digital)
     ANCON0 = 0;
@@ -44,8 +47,8 @@ void configureOutputs() {
 }
 
 void configureCan() {    
-    // first move to CONFIG mode (and wait for the switch to finish)
-    can_setMode(CONFIG_MODE, TRUE);
+    // first move to CONFIG mode
+    can_setMode(CONFIG_MODE);
 
     can_setupBaudRate(BAUD_RATE, CPU_SPEED);
     
@@ -55,8 +58,8 @@ void configureCan() {
     header.messageType = NORMAL;
     can_setupFirstBitIdReceiveFilter(&header);
 
-    // switch CAN to loopback for now for testing, don't wait for the switch to finish
-    can_setMode(LOOPBACK_MODE, FALSE);
+    // switch CAN to normal mode
+    can_setMode(NORMAL_MODE);
 }
 
 void configure() {
@@ -68,15 +71,17 @@ void configure() {
  * Can message processing
  */
 
-void switchOutput(byte nodeID) {
-    // simply go for 1-8 - PORTA, 9-16 - PORTB, 17-24 - PORTC
+void switchOutput(volatile byte nodeID) {
+    // simply go for 1-8 - PORTC, 9-16 - PORTB, 17-24 - PORTA
+    // (mind that RA4 does not exist and B3 and B2 are used by CANRX and CANTX)
+    // i.e nodeIds 11, 12 and 21 should not be used
     // need to flip the respective bit - shift by 0 up to 7 bits
-    if (nodeID>0 && nodeID<=8) { // PORTA
-        PORTA ^= 1 << (nodeID -1);
+    if (nodeID>0 && nodeID<=8) { // PORTC
+        PORTC ^= 1 << (nodeID -1);
     } else if (nodeID>8 && nodeID<=16) { // PORTB
         PORTB ^= 1 << (nodeID-9);
-    } else if (nodeID>16 && nodeID<=24) { // PORTC
-        PORTC ^= 1 << (nodeID-17);
+    } else if (nodeID>16 && nodeID<=24) { // PORTA
+        PORTA ^= 1 << (nodeID-17);
     }
 }
 
@@ -144,7 +149,7 @@ int main(void) {
     
     // all OK, so start up
     configure();
-
+    
     // main loop
     while (TRUE) { // nothing to be done here, all processed inside the interrupt routines
     }
