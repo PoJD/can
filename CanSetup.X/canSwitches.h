@@ -31,8 +31,8 @@ typedef enum {
     LIVING_ROOM       = 8,
     LOBBY             = 9,
     HALL_DOWN         = 10,
-    GUEST_ROOM        = 11,
-    CLEANING_ROOM     = 12,
+    GUEST_ROOM        = 13, // 11 and 12 should not be used according to CanRelay.X
+    CLEANING_ROOM     = 14,
     
     /** 1st floor */
     CHILD_ROOM_1      = 129,
