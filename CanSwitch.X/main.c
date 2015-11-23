@@ -99,6 +99,8 @@ void configureInterrupts() {
 }
 
 void configureCan() {
+    can_init();
+    
     // first move to CONFIG mode
     can_setMode(CONFIG_MODE);
 
