@@ -27,6 +27,12 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
  * Setup section
  */
 
+void configureSpeed() {
+    // setup 16MHz oscillator first (disable PLL - 1st bit, then 4 bits setup speed)
+    // so effective CPU_SPEED is therefore 4MHz
+    OSCCON = 0b01111000;
+}
+
 void configureOutputs() {
     // configure everything as output and set everything as 0 initially
     TRISA = 0;
@@ -43,10 +49,11 @@ void configureOutputs() {
     // enable global and peripheral interrupts only, disable other interrupts
     INTCON = 0b11000000;
     //INTCON2 and INTCON3 and ODCON are fine by default
-    // TODO review all alternative port functions and disable all to allow outputs to work fine
 }
 
-void configureCan() {    
+void configureCan() {
+    can_init();
+    
     // first move to CONFIG mode
     can_setMode(CONFIG_MODE);
 
@@ -63,6 +70,7 @@ void configureCan() {
 }
 
 void configure() {
+    configureSpeed();    
     configureOutputs();
     configureCan();
 }
@@ -93,7 +101,7 @@ void checkCanMessageReceived() {
             // we can only receive normal messages, so all we need to know is the canID = so the low ID register is enough
             // switch on the respective output directly from here for now
             // simply ignore 4 highest bits (message type and floor) = 4bits from high and 3 bits from low register
-            byte nodeID = (RXB0SIDH >> 4) + (RXB0SIDL << 5);
+            byte nodeID = (RXB0SIDH << 4) + (RXB0SIDL >> 5);
             switchOutput(nodeID);
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
