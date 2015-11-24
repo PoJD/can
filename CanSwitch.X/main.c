@@ -55,6 +55,13 @@ void configureInput() {
     // so we configure B0 only 
     // all other shared functionality on the pin is disabled by default, so no need to override anything
     TRISB = 0b00000001;
+    
+    // configure other ports as outputs as set to 0
+    TRISA = 0;
+    TRISC = 0;
+    PORTA = 0;
+    PORTB = 0;
+    PORTC = 0;
 
     // disable all analog inputs (set as digital)
     ANCON0 = 0;
