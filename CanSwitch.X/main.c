@@ -34,7 +34,8 @@ boolean switchPressed = FALSE;
 
 /** timer data */
 boolean timerElapsed = FALSE;
-int seconds = 0;
+unsigned long quarterSecond = 0;
+unsigned long seconds = 0;
 
 /** config data - if a config CAN message was sent */
 int configData = 0;
@@ -86,10 +87,10 @@ void configureInput() {
 }
 
 void configureTimer() {
-    // enable timer, internal clock, use prescaler 1:64 (last 3 bits below)
-    // so we have 2^16 * 64 = 4mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
-    // we have 16mil oscillator cycles each second, so we should see an interrupt each second
-    T0CON = 0b10000101;
+    // enable timer, internal clock, use prescaler 1:16 (last 3 bits below)
+    // so we have 2^16 * 16 = 1mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
+    // we have 4mil oscillator cycles each second, so we should see an interrupt 4 times a second
+    T0CON = 0b10000011;
     // enable timer interrupts
     INTCONbits.TMR0IE = 1;
 }
@@ -121,6 +122,10 @@ void configureCan() {
 
     // switch CAN to normal mode (using real underlying CAN)
     can_setMode(NORMAL_MODE);
+    
+    // now enable CAN interrupts    
+    PIE5bits.ERRIE = 1;  // Enable CAN BUS error interrupt
+    PIE5bits.TXB0IE = 1; // Enable Transmit Buffer 0 Interrupt
 }
 
 void configure() {
@@ -141,20 +146,75 @@ void checkInputChanged() {
     }
 }
 
+void updateTick() {
+    if ( (++quarterSecond) % 4 == 0) { // we can safely let this overflow
+        seconds ++;
+    }
+}
+
+void checkHeartBeat() {
+    if (seconds >= heartbeatTimeout) {
+        seconds = 0;
+        timerElapsed = TRUE;
+    }    
+}
+
+void switchStatusLedOn() {
+    PORTCbits.RC1 = 1;
+}
+
+void switchStatusLedOff() {
+    PORTCbits.RC1 = 0;
+}
+
+void checkStatus() {
+    int timeDiff = quarterSecond - messageStatus.timestamp;
+    if (timeDiff > 8) { //2 secs passed, nothing else to be done here
+        switchStatusLedOff();
+        // and erase the message status, so that we cannot be triggered again
+        messageStatus.timestamp = 0;
+        messageStatus.statusCode = NOTHING_SENT;
+        return;
+    }
+
+    // otherwise we are within 2 secs after message sent
+    switch (messageStatus.statusCode) {
+        // if message is just sending, switch off the status (was switched on earlier when sending CAN message)
+        // it could be that the status already changed, but we have to reflect the blink by switching it off here first
+        case SENDING:
+            if (timeDiff > 1) {
+                switchStatusLedOff();
+            }
+            break;
+        case OK:
+            if (timeDiff > 0) { // switch on all the time
+                switchStatusLedOn();
+            }
+            break;
+        case ERROR:
+            // alternate the status here
+            if (timeDiff % 2 == 0) {
+                switchStatusLedOn();
+            } else {
+                switchStatusLedOff();
+            }
+            break;
+    }
+}
+
 void checkTimerExpired() {
     // check if timer 0 interrupt is enabled and interrupt flag set
-    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {    
-        if (++seconds >= heartbeatTimeout) {
-            seconds = 0;
-            timerElapsed = TRUE;
-        }
+    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {
+        updateTick();
+        checkHeartBeat();
+        checkStatus();
         INTCONbits.TMR0IF = 0; // clear the interrupt
     }
 }
 
-void checkCanMessageReceived() {
-    // check if CAN receive buffer 0 interrupt is enabled and interrupt flag set
+void checkCan() {
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
+        // CAN receive buffer 0 interrupt
         // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
         if (RXB0CONbits.RXFUL) {
             // we can only receive config messages, so no need to check what canID did we get
@@ -162,8 +222,18 @@ void checkCanMessageReceived() {
             configData = (RXB0D0 << 8) + RXB0D1;
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
-        PIR5bits.RXB0IF = 0; // clear the interrupt
-    }    
+        PIR5bits.RXB0IF = 0;
+    } else if (PIE5bits.TXB0IE && PIR5bits.TXB0IF) {
+        // Transmit Buffer 0 interrupt
+        // means the CAN send just finished OK
+        messageStatus.statusCode = OK;
+        PIR5bits.TXB0IF = 0;
+    } else if (PIE5bits.ERRIE && PIR5bits.ERRIF) {
+        // Can Module Error Interrupt
+        // means some error in CAN happened
+        messageStatus.statusCode = ERROR;
+        PIR5bits.ERRIF = 0;
+    }
 }
 
 /**
@@ -173,7 +243,7 @@ void checkCanMessageReceived() {
 void interrupt handleInterrupt(void) {
     checkTimerExpired();
     checkInputChanged();
-    checkCanMessageReceived();
+    checkCan();
 }
 
 /*
@@ -228,6 +298,10 @@ boolean initConfigData() {
 }
 
 void sendCanMessage(MessageType messageType) {
+    // just 1 blink until next timer interrupt
+    switchStatusLedOn();
+    messageStatus.timestamp = quarterSecond;
+    
     CanHeader header;
     header.nodeID = nodeID;
     header.messageType = messageType;

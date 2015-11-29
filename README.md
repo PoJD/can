@@ -28,6 +28,9 @@ Key features:
 
 * invoke setupCanSwitch (nodeId) to setup EEPROM of the chip as the CanSwitch
 * invoke setupCanRelay (bit floor) to setup EEPROM of the chip as the CanRelay
+* Uses port RC1 as a "status port"
+** It blinks shortly (1/4 of a second) after a button is pressed to indicate that works
+** Followed by either 1sec long blink to indicate CAN message sent OK or 4 short blinks in a sec to indicate a CAN error
 
 ### CanRelay.X
 This project is the can relay implementation. The chips programmed this way are planned to be installed on a PCB directly controlling the relays for lights.
