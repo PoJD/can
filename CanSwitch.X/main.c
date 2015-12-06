@@ -46,9 +46,8 @@ int configData = 0;
  */
 
 void configureSpeed() {
-    // setup 16MHz oscillator first (disable PLL - 1st bit, then 4 bits setup speed)
-    // so effective CPU_SPEED is therefore 4MHz
-    OSCCON = 0b01111000;
+    // setup external oscillator - use default primary oscillator = as defined by config.h (last 2 bits)
+    OSCCON = 0;
 }
 
 void configureInput() {

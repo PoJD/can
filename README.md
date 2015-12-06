@@ -42,4 +42,4 @@ Key features:
 #### Mapping of ports
 * 1-8 toggles PORTC1..PORTC7
 * 9-16 toggles PORTB1..PORTB7 (PORTB3 and PORTB2 are used by CANRX and CANTX though, so should not be used = 11 and 12)
-* 17-24 toggles PORTA1..PORTA7 (PORTA4 does not exist though, so should not be used = 21)
+* 17-24 toggles PORTA1..PORTA7 (PORTA4 does not exist though, so should not be used = 21, RA7 and RA6 are used by crystal, so should not be used either = 23 and 24)
