@@ -17,11 +17,25 @@
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
 
+#define COMPLEX_OPERATOR_SWITCH 0b10000000
+#define COMPLEX_OPERATOR_SET    0b01000000
+#define COMPLEX_OPERATOR_CLEAR  0b00100000
+#define COMPLEX_OPERATOR_GET    0b00010000
+
 /** 
  * These should be constants really (written and read from EEPROM)
  */
 
 Floor floor = GROUND; // is mandated to be set in EEPROM
+
+/**
+ * These are control variables used by the main loop
+ */
+
+/** received node ID over CAN */
+byte receivedNodeID = 0;
+/** received data over CAN */
+byte receivedDataByte = 0;
 
 /*
  * Setup section
@@ -63,6 +77,10 @@ void configureCan() {
     header.nodeID = floor; // node ID = floor (first bit most important only really)
     header.messageType = NORMAL;
     can_setupFirstBitIdReceiveFilter(&header);
+    
+    // in addition to the above, also setup filter to receive complex message types for the same node's floor
+    header.messageType = COMPLEX;
+    can_setupFirstBitIdReceiveFilter(&header);
 
     // switch CAN to normal mode
     can_setMode(NORMAL_MODE);
@@ -78,30 +96,18 @@ void configure() {
  * Can message processing
  */
 
-void switchOutput(volatile byte nodeID) {
-    // simply go for 1-8 - PORTC, 9-16 - PORTB, 17-24 - PORTA
-    // (mind that RA4 does not exist and B3 and B2 are used by CANRX and CANTX)
-    // i.e nodeIds 11, 12 and 21 should not be used
-    // need to flip the respective bit - shift by 0 up to 7 bits
-    if (nodeID>0 && nodeID<=8) { // PORTC
-        PORTC ^= 1 << (nodeID -1);
-    } else if (nodeID>8 && nodeID<=16) { // PORTB
-        PORTB ^= 1 << (nodeID-9);
-    } else if (nodeID>16 && nodeID<=24) { // PORTA
-        PORTA ^= 1 << (nodeID-17);
-    }
-}
-
 void checkCanMessageReceived() {
     // check if CAN receive buffer 0 interrupt is enabled and interrupt flag set
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
         if (RXB0CONbits.RXFUL) {
-            // we can only receive normal messages, so all we need to know is the canID = so the low ID register is enough
-            // switch on the respective output directly from here for now
-            // simply ignore 4 highest bits (message type and floor) = 4bits from high and 3 bits from low register
-            byte nodeID = (RXB0SIDH << 4) + (RXB0SIDL >> 5);
-            switchOutput(nodeID);
+            // we can only receive normal and complex messages, so we need to know the canID = the low ID register is enough
+            // simply ignore 4 highest bits (message type and floor) = just take the 4bits from high and 3 bits from low register
+            receivedNodeID = (RXB0SIDH << 4) + (RXB0SIDL >> 5);
+            // also take the 1st byte of data
+            receivedDataByte = RXB0D0;
+            // the main thread will process this message then
+            
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
         PIR5bits.RXB0IF = 0; // clear the interrupt
@@ -144,6 +150,57 @@ boolean initConfigData() {
     return TRUE;
 }
 
+void performOperation (byte receivedDataByte, volatile byte* port, byte shift) {
+    // see http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
+    switch (receivedDataByte) {
+        case COMPLEX_OPERATOR_SWITCH:
+            *port ^= shift;
+            break;
+        case COMPLEX_OPERATOR_SET:
+            *port |= shift;
+            break;
+        case COMPLEX_OPERATOR_CLEAR:
+            *port &= ~shift;
+            break;
+    }
+}
+
+void processIncomingTraffic() {
+    if (receivedDataByte == COMPLEX_OPERATOR_GET) {
+        // TODO send respective CAN message - always for all ports, do not support this for 1 port only
+    } else { // other operations are setting things up
+        if (receivedNodeID > 0) {
+            // simply go for 1-8 - PORTC, 9-16 - PORTB, 17-24 - PORTA
+            // (mind that RA4 does not exist and B3 and B2 are used by CANRX and CANTX)
+            // i.e nodeIds 11, 12 and 21 should not be used
+            // need to flip/set/clear the respective bit in respective PORT - shift by 0 up to 7 bits
+
+            // find out the number in 0..7 - to find out the respective bit to change
+            // simply decrease by 1 and take just the 3 bits. The move it to find out the shift we need below
+            byte shift = 1 << ((receivedNodeID-1) & 0b111);
+
+            volatile byte* port;
+            if (receivedNodeID>0 && receivedNodeID<=8) {
+                port = &PORTC;
+            } else if (receivedNodeID>8 && receivedNodeID<=16) {
+                port = &PORTB;
+            } else if (receivedNodeID>16 && receivedNodeID<=24) {
+                port = &PORTA;
+            }
+
+            performOperation (receivedDataByte, port, shift);
+        } else {
+            // node ID 0 - means do the same operations as above, but for all ports
+            performOperation (receivedDataByte, &PORTA, 0b11111111);
+            performOperation (receivedDataByte, &PORTB, 0b11111111);
+            performOperation (receivedDataByte, &PORTC, 0b11111111);
+        }
+    }
+    
+    receivedNodeID = 0;
+    receivedDataByte = 0;    
+}
+
 /**
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
  */
@@ -158,7 +215,11 @@ int main(void) {
     configure();
     
     // main loop
-    while (TRUE) { // nothing to be done here, all processed inside the interrupt routines
+    while (TRUE) {
+        // received a message over CAN, so react to that
+        if (receivedNodeID!=0 && receivedDataByte!=0) {
+            processIncomingTraffic();
+        }
     }
     
     return 0;
