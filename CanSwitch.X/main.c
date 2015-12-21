@@ -31,6 +31,8 @@ byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /** was the switch pressed? */
 boolean switchPressed = FALSE;
+/** last time (in quarter of seconds) when a switch was pressed */
+unsigned long lastSwitchPressed = 0;
 
 /** timer data */
 boolean timerElapsed = FALSE;
@@ -327,7 +329,12 @@ int main(void) {
     // main loop
     while (TRUE) {
         if (switchPressed) {
-            if (!suppressSwitch) {
+            // only react to the switch press if at least half of a second elapsed
+            // otherwise it could be faulty switch sending signals more often
+            // avoid using message timestamp since that is also set by heartbeat messages 
+            // so we would get some sporadic no reaction to switch press if done right after a hearbeat
+            if (!suppressSwitch && (quarterSecond - lastSwitchPressed) > 1) {
+                lastSwitchPressed = quarterSecond;
                 sendCanMessage(NORMAL);
             }
             switchPressed = FALSE;
