@@ -36,6 +36,7 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
 byte receivedNodeID = 0;
 /** received data over CAN */
 byte receivedDataByte = 0;
+boolean receivedData = FALSE;
 
 /*
  * Setup section
@@ -108,6 +109,7 @@ void checkCanMessageReceived() {
             // also take the 1st byte of data
             receivedDataByte = RXB0D0;
             // the main thread will process this message then
+            receivedData = TRUE;
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
@@ -174,11 +176,14 @@ void sendCanMessageWithAllPorts() {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 3 since we are sending all PORTA, PORTB and PORTC
-    message.dataLength = 3;
-    message.data[0] = PORTA;
-    message.data[1] = PORTB;
-    message.data[2] = PORTC;
+    // data length - equal to 5 since we are sending all PORTA, PORTB and PORTC together with error registers
+    message.dataLength = 5;
+    byte* data = &message.data;
+    *data++ = PORTA;
+    *data++ = PORTB;
+    *data++ = PORTC;
+    *data++ = TXERRCNT;
+    *data++ = RXERRCNT;
     
     can_send(&message);
 }
@@ -215,7 +220,8 @@ void processIncomingTraffic() {
     }
     
     receivedNodeID = 0;
-    receivedDataByte = 0;    
+    receivedDataByte = 0;
+    receivedData = FALSE;
 }
 
 /**
@@ -234,7 +240,7 @@ int main(void) {
     // main loop
     while (TRUE) {
         // received a message over CAN, so react to that
-        if (receivedNodeID!=0 && receivedDataByte!=0) {
+        if (receivedData) {
             processIncomingTraffic();
         }
     }
