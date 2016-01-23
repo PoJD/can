@@ -309,7 +309,20 @@ void sendCanMessage(MessageType messageType) {
     
     CanMessage message;
     message.header = &header;
-    message.isSwitchOn = switchPressed;
+    
+    // data length - equal to 3 for heartbeat and 1 for normal messages
+    // (1 byte is enough for the 1 bit of data only so far (is it switched on) + few more byte more for error counts)
+    message.dataLength = (messageType == HEARTBEAT) ? 3:1;
+    // 1st byte 1st bit = is the switch on?
+    message.data[0] = switchPressed << 7;
+    
+    if (messageType == HEARTBEAT) {
+        // whole 2nd byte = CAN transmit error count read from the register
+        message.data[1] = TXERRCNT;
+        // whole 3rd byte = CAN receive error count read from the register
+        message.data[2] = RXERRCNT;
+    }
+    
     can_send(&message);
 }
 

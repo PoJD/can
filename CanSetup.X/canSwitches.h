@@ -21,29 +21,31 @@ extern "C" {
  */
 typedef enum {
     /** ground floor */
+    // 5. 7, 8, 11, 12 should not be used according to CanRelay.X    
     WORK_ROOM         = 1,
     GARAGE            = 2,
     TECHNICAL_ROOM    = 3,
     BATHROOM_DOWN     = 4,
-    WC_DOWN           = 5,
-    PANTRY            = 6,
-    KITCHEN           = 7,
-    LIVING_ROOM       = 8,
-    LOBBY             = 9,
-    HALL_DOWN         = 10,
-    GUEST_ROOM        = 13, // 11 and 12 should not be used according to CanRelay.X
-    CLEANING_ROOM     = 14,
+    WC_DOWN           = 6,
+    PANTRY            = 9,
+    KITCHEN           = 10,
+    LIVING_ROOM       = 13,
+    LOBBY             = 14,
+    HALL_DOWN         = 15,
+    GUEST_ROOM        = 16,
+    CLEANING_ROOM     = 17,
     
     /** 1st floor */
+    // 128 + (5. 7, 8, 11, 12) should not be used according to CanRelay.X    
     CHILD_ROOM_1      = 129,
     CHILD_ROOM_2      = 130,
     CHILD_BATHROOM    = 131,
     CHILD_ROOM_3      = 132,
-    CHILD_ROOM_4      = 133,
-    HALL_UP           = 134,
-    BEDROOM           = 135,
-    BEDROOM_BATHROOM  = 136,
-    CLOAK_ROOM        = 137
+    CHILD_ROOM_4      = 134,
+    HALL_UP           = 137,
+    BEDROOM           = 138,
+    BEDROOM_BATHROOM  = 141,
+    CLOAK_ROOM        = 142
 } CanSwitchNode;
 
 typedef enum {

@@ -101,9 +101,10 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
         if (RXB0CONbits.RXFUL) {
-            // we can only receive normal and complex messages, so we need to know the canID = the low ID register is enough
-            // simply ignore 4 highest bits (message type and floor) = just take the 4bits from high and 3 bits from low register
-            receivedNodeID = (RXB0SIDH << 4) + (RXB0SIDL >> 5);
+            // we can only receive normal and complex messages, so we need to know the canID
+            CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
+            // also ignore highest bit of node ID = floor
+            receivedNodeID = header.nodeID & MAX_7_BITS;
             // also take the 1st byte of data
             receivedDataByte = RXB0D0;
             // the main thread will process this message then
@@ -170,9 +171,8 @@ void processIncomingTraffic() {
         // TODO send respective CAN message - always for all ports, do not support this for 1 port only
     } else { // other operations are setting things up
         if (receivedNodeID > 0) {
-            // simply go for 1-8 - PORTC, 9-16 - PORTB, 17-24 - PORTA
-            // (mind that RA4 does not exist and B3 and B2 are used by CANRX and CANTX)
-            // i.e nodeIds 11, 12 and 21 should not be used
+            // simply go for 1-8 - PORTA, 9-16 - PORTB, 17-24 - PORTC
+            // (mind that some IDs should not be used - see README)
             // need to flip/set/clear the respective bit in respective PORT - shift by 0 up to 7 bits
 
             // find out the number in 0..7 - to find out the respective bit to change
@@ -181,11 +181,11 @@ void processIncomingTraffic() {
 
             volatile byte* port;
             if (receivedNodeID>0 && receivedNodeID<=8) {
-                port = &PORTC;
+                port = &PORTA;
             } else if (receivedNodeID>8 && receivedNodeID<=16) {
                 port = &PORTB;
             } else if (receivedNodeID>16 && receivedNodeID<=24) {
-                port = &PORTA;
+                port = &PORTC;
             }
 
             performOperation (receivedDataByte, port, shift);

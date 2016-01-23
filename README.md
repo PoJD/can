@@ -40,6 +40,6 @@ Key features:
 * For a given normal message, it would ignore the first bit and treat the rest as the counter of port to switch on.
 
 #### Mapping of ports
-* 1-8 toggles PORTC1..PORTC7
-* 9-16 toggles PORTB1..PORTB7 (PORTB3 and PORTB2 are used by CANRX and CANTX though, so should not be used = 11 and 12)
-* 17-24 toggles PORTA1..PORTA7 (PORTA4 does not exist though, so should not be used = 21, RA7 and RA6 are used by crystal, so should not be used either = 23 and 24)
+* 1-8 toggles PORTA0..PORTA7 (PORTA4 does not exist though, so should not be used = 5, RA7 and RA6 are used by crystal, so should not be used either = 7 and 8)
+* 9-16 toggles PORTB0..PORTB7 (PORTB3 and PORTB2 are used by CANRX and CANTX though, so should not be used = 11 and 12)
+* 17-24 toggles PORTC0..PORTC7
