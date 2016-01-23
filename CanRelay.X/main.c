@@ -166,9 +166,26 @@ void performOperation (byte receivedDataByte, volatile byte* port, byte shift) {
     }
 }
 
+void sendCanMessageWithAllPorts() {
+    CanHeader header;
+    header.nodeID = 0; // the only time we are sending 0 as node ID
+    header.messageType = COMPLEX_REPLY;
+    
+    CanMessage message;
+    message.header = &header;
+    
+    // data length - equal to 3 since we are sending all PORTA, PORTB and PORTC
+    message.dataLength = 3;
+    message.data[0] = PORTA;
+    message.data[1] = PORTB;
+    message.data[2] = PORTC;
+    
+    can_send(&message);
+}
+
 void processIncomingTraffic() {
     if (receivedDataByte == COMPLEX_OPERATOR_GET) {
-        // TODO send respective CAN message - always for all ports, do not support this for 1 port only
+        sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
         if (receivedNodeID > 0) {
             // simply go for 1-8 - PORTA, 9-16 - PORTB, 17-24 - PORTC
