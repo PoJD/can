@@ -21,6 +21,9 @@ Key features:
 * It does simply send a CAN message upon an input change (high to low) on PORTB5. The CAN ID is read from EEPROM. The data contains just the switch state (so 0 all the time)
 * It does send regular heartbeat messages (5mins interval by default) with the state of the port B (most likely high then). Together with this information, it also reads the error counts from CAN controller (receive and send error count)
 * It also supports CONFIG messages being sent to the node to update nodeID or heartbeat timeout or a flag to suppress the switch
+* Uses port RC1 as a "status port"
+ * It blinks shortly (1/4 of a second) after a button is pressed to indicate that works
+ * Followed by either 1sec long blink to indicate CAN message sent OK or 4 short blinks in a sec to indicate a CAN error
 
 ### CanSetup.X
 This project serves to setup either CanSwitch or CanRealy chips - write the necessary data to EEPROM based on the node.
@@ -28,9 +31,6 @@ Key features:
 
 * invoke setupCanSwitch (nodeId) to setup EEPROM of the chip as the CanSwitch
 * invoke setupCanRelay (bit floor) to setup EEPROM of the chip as the CanRelay
-* Uses port RC1 as a "status port"
- * It blinks shortly (1/4 of a second) after a button is pressed to indicate that works
- * Followed by either 1sec long blink to indicate CAN message sent OK or 4 short blinks in a sec to indicate a CAN error
 
 ### CanRelay.X
 This project is the can relay implementation. The chips programmed this way are planned to be installed on a PCB directly controlling the relays for lights.
