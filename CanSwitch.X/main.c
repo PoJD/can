@@ -22,7 +22,7 @@
  */
 
 boolean suppressSwitch = FALSE;
-int heartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
+int tHeartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /**
@@ -31,13 +31,19 @@ byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /** was the switch pressed? */
 boolean switchPressed = FALSE;
+
+/** 
+ * The unsigned longs below would by definition turn to 0 when they reach max. 
+ * So the only issue to cover is the check of the tLastSwitchQuarterSec against tQuarterSecSinceStart
+ * which is covered in the main loop. tQuarterSecSinceStart being left the only long not reset in the code to avoid reaching max anywhere */
+
 /** last time (in quarter of seconds) when a switch was pressed */
-unsigned long lastSwitchPressed = 0;
+unsigned long tLastSwitchQuarterSec = 0;
 
 /** timer data */
 boolean timerElapsed = FALSE;
-unsigned long quarterSecond = 0;
-unsigned long seconds = 0;
+unsigned long tQuarterSecSinceStart = 0;
+unsigned long tSecsSinceHeartbeat = 0;
 
 /** config data - if a config CAN message was sent */
 int configData = 0;
@@ -81,7 +87,7 @@ void configureInput() {
     // now clear the interrupt flag (could be set on startup)
     INTCONbits.INT0IF = 0;
     
-    // interrupt on falling change (pull up keep it high, only interrupt on "key down")
+    // interrupt on falling change (pull up keep it high, only interrupt on "value down")
     INTCON2bits.INTEDG0 = 0;
     // till now enable external interrupt 0 (PORTB0 change)
     INTCONbits.INT0IE = 1;
@@ -148,14 +154,14 @@ void checkInputChanged() {
 }
 
 void updateTick() {
-    if ( (++quarterSecond) % 4 == 0) { // we can safely let this overflow
-        seconds ++;
+    if ( (++tQuarterSecSinceStart) % 4 == 0) { // we can safely let this go infinitely - would turn to 0 after max unsigned long
+        tSecsSinceHeartbeat ++;
     }
 }
 
 void checkHeartBeat() {
-    if (seconds >= heartbeatTimeout) {
-        seconds = 0;
+    if (tSecsSinceHeartbeat >= tHeartbeatTimeout) {
+        tSecsSinceHeartbeat = 0;
         timerElapsed = TRUE;
     }    
 }
@@ -169,7 +175,7 @@ void switchStatusLedOff() {
 }
 
 void checkStatus() {
-    int timeDiff = quarterSecond - messageStatus.timestamp;
+    int timeDiff = tQuarterSecSinceStart - messageStatus.timestamp;
     if (timeDiff > 8) { //2 secs passed, nothing else to be done here
         switchStatusLedOff();
         // and erase the message status, so that we cannot be triggered again
@@ -255,7 +261,7 @@ void updateConfigData(DataItem *data) {
     if (dao_isValid(data)) {
         switch (data->dataType) {
             case HEARTBEAT_TIMEOUT:
-                heartbeatTimeout = data->value;
+                tHeartbeatTimeout = data->value;
                 break;
             case SUPPRESS_SWITCH:
                 suppressSwitch = data->value;
@@ -284,7 +290,7 @@ boolean initConfigData() {
     // now also use the nodeID as the number of seconds already passed from the timer
     // helps avoiding burst of heartbeat messages from all can switches on the network at the same time
     // they should evenly split by a second as a result of this
-    seconds = nodeID;
+    tSecsSinceHeartbeat = nodeID;
     
     // other attributes are not mandatory
     
@@ -301,7 +307,7 @@ boolean initConfigData() {
 void sendCanMessage(MessageType messageType) {
     // just 1 blink until next timer interrupt
     switchStatusLedOn();
-    messageStatus.timestamp = quarterSecond;
+    messageStatus.timestamp = tQuarterSecSinceStart;
     
     CanHeader header;
     header.nodeID = nodeID;
@@ -344,10 +350,10 @@ int main(void) {
         if (switchPressed) {
             // only react to the switch press if at least half of a second elapsed
             // otherwise it could be faulty switch sending signals more often
-            // avoid using message timestamp since that is also set by heartbeat messages 
-            // so we would get some sporadic no reaction to switch press if done right after a hearbeat
-            if (!suppressSwitch && (quarterSecond - lastSwitchPressed) > 1) {
-                lastSwitchPressed = quarterSecond;
+            // #19 the last part of the if is to cover the case when quarterSecond reaches max unsigned long
+            // and would therefore turn 0. Without this this condition would then never be met and the switch suppressed effectively
+            if (!suppressSwitch && ((tQuarterSecSinceStart - tLastSwitchQuarterSec) > 1 || (tQuarterSecSinceStart < tLastSwitchQuarterSec))) {
+                tLastSwitchQuarterSec = tQuarterSecSinceStart;
                 sendCanMessage(NORMAL);
             }
             switchPressed = FALSE;
