@@ -26,7 +26,7 @@
  *  */
 boolean DEBUG = FALSE;
 boolean suppressSwitch = FALSE;
-int tHeartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
+int tHeartbeatTimeout = 10; // 10seconds default
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /**
