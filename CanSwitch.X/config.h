@@ -19,14 +19,9 @@ extern "C" {
 
 // 'C' source line config statements
 
-#include <xc.h>
-
-// #pragma config statements should precede project file includes.
-// Use project enums instead of #define for ON and OFF.
-
 // CONFIG1L
-#pragma config RETEN = OFF      // VREG Sleep Enable bit (Ultra low-power regulator is Disabled (Controlled by REGSLP bit))
-#pragma config INTOSCSEL = HIGH // LF-INTOSC Low-power Enable bit (LF-INTOSC in High-power mode during Sleep)
+#pragma config RETEN = ON       // VREG Sleep Enable bit (Ultra low-power regulator is Enabled (Controlled by SRETEN bit))
+#pragma config INTOSCSEL = LOW  // LF-INTOSC Low-power Enable bit (LF-INTOSC in Low-power mode during Sleep)
 #pragma config SOSCSEL = DIG    // SOSC Power Selection and mode Configuration bits (Digital (SCLKI) mode)
 #pragma config XINST = OFF      // Extended Instruction Set (Disabled)
 
@@ -38,7 +33,7 @@ extern "C" {
 
 // CONFIG2L
 #pragma config PWRTEN = OFF     // Power Up Timer (Disabled)
-#pragma config BOREN = SBORDIS  // Brown Out Detect (Enabled in hardware, SBOREN disabled)
+#pragma config BOREN = NOSLP    // Brown Out Detect (Enabled while active, disabled in SLEEP, SBOREN disabled)
 #pragma config BORV = 3         // Brown-out Reset Voltage bits (1.8V)
 #pragma config BORPWR = ZPBORMV // BORMV Power level (ZPBORMV instead of BORMV is selected)
 
@@ -85,6 +80,10 @@ extern "C" {
 // CONFIG7H
 #pragma config EBTRB = OFF      // Table Read Protect Boot (Disabled)
 
+// #pragma config statements should precede project file includes.
+// Use project enums instead of #define for ON and OFF.
+
+#include <xc.h>
 
 #ifdef	__cplusplus
 }

@@ -21,6 +21,10 @@
  * These should be constants really (written and read from EEPROM)
  */
 
+/** debug mode utilizes timer, LED status, hearbeats, etc, otherwise low power mode most of the time
+ * 
+ *  */
+boolean DEBUG = FALSE;
 boolean suppressSwitch = FALSE;
 int tHeartbeatTimeout = 300; // 5 * 60 sec = 5 minutes
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
@@ -56,6 +60,9 @@ int configData = 0;
 void configureSpeed() {
     // setup external oscillator - use default primary oscillator = as defined by config.h (last 2 bits)
     OSCCON = 0;
+    
+    // enable ultra low power regulator in sleep, see also RETEN in config.h
+    WDTCONbits.SRETEN = 1; 
 }
 
 void configureInput() {
@@ -94,12 +101,14 @@ void configureInput() {
 }
 
 void configureTimer() {
-    // enable timer, internal clock, use prescaler 1:16 (last 3 bits below)
-    // so we have 2^16 * 16 = 1mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
-    // we have 4mil oscillator cycles each second, so we should see an interrupt 4 times a second
-    T0CON = 0b10000011;
-    // enable timer interrupts
-    INTCONbits.TMR0IE = 1;
+    if (DEBUG) {
+        // enable timer, internal clock, use prescaler 1:16 (last 3 bits below)
+        // so we have 2^16 * 16 = 1mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
+        // we have 4mil oscillator cycles each second, so we should see an interrupt 4 times a second
+        T0CON = 0b10000011;
+        // enable timer interrupts
+        INTCONbits.TMR0IE = 1;
+    }
 }
 /**
  * Configure all the interrupts on this chip as needed by this application.
@@ -167,11 +176,15 @@ void checkHeartBeat() {
 }
 
 void switchStatusLedOn() {
-    PORTCbits.RC1 = 1;
+    if (DEBUG) {
+        PORTCbits.RC1 = 1;
+    }
 }
 
 void switchStatusLedOff() {
-    PORTCbits.RC1 = 0;
+    if (DEBUG) {
+        PORTCbits.RC1 = 0;
+    }
 }
 
 void checkStatus() {
@@ -306,7 +319,7 @@ boolean initConfigData() {
 
 void sendCanMessage(MessageType messageType) {
     // just 1 blink until next timer interrupt
-    switchStatusLedOn();
+    //switchStatusLedOn();
     messageStatus.timestamp = tQuarterSecSinceStart;
     
     CanHeader header;
@@ -328,8 +341,40 @@ void sendCanMessage(MessageType messageType) {
         // whole 3rd byte = CAN receive error count read from the register
         message.data[2] = RXERRCNT;
     }
-    
-    can_send(&message);
+    // use the synchronous version to make sure the message is really sent before moving on
+    can_sendSynchronous(&message);
+}
+
+void switchTransceiverOn() {
+    PORTCbits.RC3 = 0;
+}
+
+void switchTransceiverOff() {
+    PORTCbits.RC3 = 1;
+}
+
+void sleepDevice() {
+    if (!DEBUG) {
+        // setup SLEEP mode of the CAN module to save power
+        can_setMode(SLEEP_MODE);
+        // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
+        switchTransceiverOff();
+        // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
+        Sleep();
+    }
+}
+
+void wakeUpDevice() {
+    if (!DEBUG) {
+        switchTransceiverOn();
+        can_setMode(NORMAL_MODE);
+
+        // we need to wait 50us now since the transceiver could just be going back from standby
+        // datasheet says 40us max, we will be conservative, in the end wait 10 times more cycles
+        for (int i=0; i<CPU_SPEED * 500; i++) {
+            NOP();
+        }
+    }
 }
 
 /**
@@ -347,13 +392,10 @@ int main(void) {
 
     // main loop
     while (TRUE) {
+        wakeUpDevice();
         if (switchPressed) {
-            // only react to the switch press if at least half of a second elapsed
-            // otherwise it could be faulty switch sending signals more often
-            // #19 the last part of the if is to cover the case when quarterSecond reaches max unsigned long
-            // and would therefore turn 0. Without this this condition would then never be met and the switch suppressed effectively
-            if (!suppressSwitch && ((tQuarterSecSinceStart - tLastSwitchQuarterSec) > 1 || (tQuarterSecSinceStart < tLastSwitchQuarterSec))) {
-                tLastSwitchQuarterSec = tQuarterSecSinceStart;
+            // dropped condition for time check since that would require a timer
+            if (!suppressSwitch) {
                 sendCanMessage(NORMAL);
             }
             switchPressed = FALSE;
@@ -367,6 +409,7 @@ int main(void) {
             updateConfigData(&data);
             configData = 0;
         }
+        sleepDevice(); // now need to loop infinitely, interrupt will wake the device up and continue from next instruction -i.e. start of this loop
     }
     
     return 0;
