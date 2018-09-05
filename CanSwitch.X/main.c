@@ -270,6 +270,43 @@ void interrupt handleInterrupt(void) {
  * Action methods here
  */
 
+/**
+ * Sleep and wake up routines
+ */
+
+void switchTransceiverOn() {
+    PORTCbits.RC3 = 0;
+}
+
+void switchTransceiverOff() {
+    PORTCbits.RC3 = 1;
+}
+
+void sleepDevice() {
+    if (!DEBUG) {
+        // setup SLEEP mode of the CAN module to save power
+        can_setMode(SLEEP_MODE);
+        // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
+        switchTransceiverOff();
+        // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
+        Sleep();
+    }
+}
+
+void wakeUpDevice() {
+    if (!DEBUG) {
+        switchTransceiverOn();
+        can_setMode(NORMAL_MODE);
+
+        // we need to wait 50us now since the transceiver could just be going back from standby
+        // datasheet says 40us max, we will be conservative and do 50us instead
+        for (int i=0; i<CPU_SPEED * 50; i++) {
+            NOP();
+        }
+    }
+}
+
+
 void updateConfigData(DataItem *data) {
     if (dao_isValid(data)) {
         switch (data->dataType) {
@@ -293,10 +330,10 @@ void updateConfigData(DataItem *data) {
  * @return TRUE if all mandatory values were read OK, false otherwise
  */
 boolean initConfigData() {
-    // try nodeID, which is mandatory. If it is not set, then return false
+    // try nodeID, which is mandatory. If it is not set, then nothing to be done here, so just sleep the device
     DataItem dataItem = dao_loadDataItem(NODE_ID);
     if (!dao_isValid(&dataItem)) {
-        return FALSE;
+        sleepDevice();
     }
     updateConfigData (&dataItem);
     
@@ -343,38 +380,6 @@ void sendCanMessage(MessageType messageType) {
     }
     // use the synchronous version to make sure the message is really sent before moving on
     can_sendSynchronous(&message);
-}
-
-void switchTransceiverOn() {
-    PORTCbits.RC3 = 0;
-}
-
-void switchTransceiverOff() {
-    PORTCbits.RC3 = 1;
-}
-
-void sleepDevice() {
-    if (!DEBUG) {
-        // setup SLEEP mode of the CAN module to save power
-        can_setMode(SLEEP_MODE);
-        // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
-        switchTransceiverOff();
-        // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
-        Sleep();
-    }
-}
-
-void wakeUpDevice() {
-    if (!DEBUG) {
-        switchTransceiverOn();
-        can_setMode(NORMAL_MODE);
-
-        // we need to wait 50us now since the transceiver could just be going back from standby
-        // datasheet says 40us max, we will be conservative, in the end wait 10 times more cycles
-        for (int i=0; i<CPU_SPEED * 500; i++) {
-            NOP();
-        }
-    }
 }
 
 /**
