@@ -77,6 +77,7 @@ CAN Data
 See below examples as they can be used with the cansend utility (http://elinux.org/Can-utils). So you can invoke e.g. cansend can0 XXX, where XXX is in the below table
 * 202#80.04 - changes heartbeat for node 2 to 4 seconds
 * 202#81.2C - changes heartbeat for node 2 to 300 seconds (5 minutues = default)
+* 202#C0.01 - changes debug mode for node 2 to 1 (i.e. true, i.e. sets up debug mode)
 * 202#40.01 - switches on suppress switch on node 2 (pressing the switch on that node after this action will have no effect - no CAN message would get sent)
 * 202#00.03 - changes nodeID for node 2 to nodeID 3 (so after this, the same message would not get processed by the same node again anymore since the nodeID changed)
 * 011#80    - toggles the switch on node 11

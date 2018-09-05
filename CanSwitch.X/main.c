@@ -21,10 +21,11 @@
  * These should be constants really (written and read from EEPROM)
  */
 
-/** debug mode utilizes timer, LED status, hearbeats, etc, otherwise low power mode most of the time
- * 
- *  */
-boolean DEBUG = FALSE;
+/** 
+ * debug mode utilizes timer, LED status, hearbeats, etc, otherwise low power mode most of the time
+ * Current drawn in debug mode is around 18mA. In non debug mode when in sleep about 2 uA.
+ */
+boolean debug = FALSE;
 boolean suppressSwitch = FALSE;
 int tHeartbeatTimeout = 10; // 10seconds default
 byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
@@ -35,6 +36,8 @@ byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /** was the switch pressed? */
 boolean switchPressed = FALSE;
+/** are we right now asleep? */
+boolean aSleep = FALSE;
 
 /** 
  * The unsigned longs below would by definition turn to 0 when they reach max. 
@@ -51,6 +54,9 @@ unsigned long tSecsSinceHeartbeat = 0;
 
 /** config data - if a config CAN message was sent */
 int configData = 0;
+
+/** a flag indicating whether a CAN Wake Up interrupt was received */
+boolean canWakeUp = FALSE;
 
 
 /*
@@ -101,7 +107,7 @@ void configureInput() {
 }
 
 void configureTimer() {
-    if (DEBUG) {
+    if (debug) {
         // enable timer, internal clock, use prescaler 1:16 (last 3 bits below)
         // so we have 2^16 * 16 = 1mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
         // we have 4mil oscillator cycles each second, so we should see an interrupt 4 times a second
@@ -120,6 +126,11 @@ void configureInterrupts() {
 
     configureInput();
     configureTimer();
+}
+
+void enableCanWakeUp(boolean enable) {
+    PIR5bits.WAKIF = 0; // clear the flag
+    PIE5bits.WAKIE = enable; // enable wake up now
 }
 
 void configureCan() {
@@ -142,12 +153,64 @@ void configureCan() {
     // now enable CAN interrupts    
     PIE5bits.ERRIE = 1;  // Enable CAN BUS error interrupt
     PIE5bits.TXB0IE = 1; // Enable Transmit Buffer 0 Interrupt
+    BRGCON3bits.WAKFIL = 1; // Use CAN BUS line filter for wake up
+
+    enableCanWakeUp(TRUE);
 }
 
 void configure() {
     configureSpeed();
     configureInterrupts();
     configureCan();
+}
+
+/**
+ * Sleep and wake up routines
+ */
+
+void waitForTransceiver() {
+    // we need to wait 50us now since the transceiver could just be going back from standby
+    // datasheet says 40us max, we will be conservative rather and do 50us
+    for (int i=0; i<CPU_SPEED * 50; i++) {
+        NOP();
+    }
+}
+
+void switchTransceiver(boolean on) {
+    // applying high on standby pin of transceiver puts it into sleep and low power mode (15uA top from datasheet)
+    PORTCbits.RC3 = on;
+    waitForTransceiver();
+}
+
+void switchTransceiverOn() {
+    switchTransceiver(TRUE);
+}
+
+void switchTransceiverOff() {
+    switchTransceiver(FALSE);
+}
+
+void sleepDevice() {
+    if (!debug && !aSleep) {
+        // setup SLEEP mode of the CAN module to save power
+        aSleep = TRUE;
+        can_setMode(SLEEP_MODE);
+        switchTransceiverOff();
+        enableCanWakeUp(TRUE);
+        // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
+        Sleep();
+    }
+
+}
+
+void wakeUpDevice() {
+    if (!debug && aSleep) {
+        // in wake up on CAN, this happens automatically even before, but not for example on wake up on input interrupt
+        // so to be sure call it all the time
+        aSleep = FALSE;
+        switchTransceiverOn();
+        can_setMode(NORMAL_MODE);
+    }
 }
 
 /*
@@ -176,15 +239,26 @@ void checkHeartBeat() {
 }
 
 void switchStatusLedOn() {
-    if (DEBUG) {
+    if (debug) {
         PORTCbits.RC1 = 1;
     }
 }
 
 void switchStatusLedOff() {
-    if (DEBUG) {
+    if (debug) {
         PORTCbits.RC1 = 0;
     }
+}
+
+void setDebug(boolean newValue) {
+    if (newValue) {
+        // setting to true, so make sure timer is configured now
+        configureTimer();
+    } else {
+        // switching off DEBUG, so make sure LED is off now
+        switchStatusLedOff();
+    }
+    debug = newValue;
 }
 
 void checkStatus() {
@@ -233,6 +307,15 @@ void checkTimerExpired() {
 }
 
 void checkCan() {
+    if (PIE5bits.WAKIE && PIR5bits.WAKIF) {
+        // CAN Wake up interrupt, it seems it is being sent twice quickly upon startup,
+        // so check if the device is really asleep since the main loop could have already processed previous CAN wake up
+        if (aSleep) {
+            canWakeUp = TRUE;
+            enableCanWakeUp(FALSE); // disable it now
+        }
+        PIR5bits.WAKIF = 0;
+    }
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // CAN receive buffer 0 interrupt
         // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
@@ -270,9 +353,12 @@ void interrupt handleInterrupt(void) {
  * Action methods here
  */
 
-void updateConfigData(DataItem *data) {
+void updateConfigData0(DataItem *data, boolean forceConfigure) {
     if (dao_isValid(data)) {
         switch (data->dataType) {
+            case DEBUG:
+                setDebug(data->value);
+                break;
             case HEARTBEAT_TIMEOUT:
                 tHeartbeatTimeout = data->value;
                 break;
@@ -282,10 +368,21 @@ void updateConfigData(DataItem *data) {
             case NODE_ID:
                 nodeID = data->value;
                 // in this case we also need to configure again to change CAN acceptance filters, etc
-                configure();
+                // if the config is forced
+                if (forceConfigure) {
+                    configure();
+                }
                 break;            
         }
     }
+}
+
+void updateConfigDataAndReconfigure(DataItem *data) {
+    updateConfigData0(data, TRUE);
+}
+
+void updateConfigData(DataItem *data) {
+    updateConfigData0(data, FALSE);
 }
 
 /**
@@ -293,10 +390,10 @@ void updateConfigData(DataItem *data) {
  * @return TRUE if all mandatory values were read OK, false otherwise
  */
 boolean initConfigData() {
-    // try nodeID, which is mandatory. If it is not set, then return false
+    // try nodeID, which is mandatory. If it is not set, then move device to sleep - nothing to be done here
     DataItem dataItem = dao_loadDataItem(NODE_ID);
     if (!dao_isValid(&dataItem)) {
-        return FALSE;
+        sleepDevice();
     }
     updateConfigData (&dataItem);
     
@@ -314,6 +411,10 @@ boolean initConfigData() {
     dataItem = dao_loadDataItem(SUPPRESS_SWITCH);
     updateConfigData (&dataItem);
     
+    // the same here
+    dataItem = dao_loadDataItem(DEBUG);
+    updateConfigData (&dataItem);
+
     return TRUE;
 }
 
@@ -345,38 +446,6 @@ void sendCanMessage(MessageType messageType) {
     can_sendSynchronous(&message);
 }
 
-void switchTransceiverOn() {
-    PORTCbits.RC3 = 0;
-}
-
-void switchTransceiverOff() {
-    PORTCbits.RC3 = 1;
-}
-
-void sleepDevice() {
-    if (!DEBUG) {
-        // setup SLEEP mode of the CAN module to save power
-        can_setMode(SLEEP_MODE);
-        // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
-        switchTransceiverOff();
-        // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
-        Sleep();
-    }
-}
-
-void wakeUpDevice() {
-    if (!DEBUG) {
-        switchTransceiverOn();
-        can_setMode(NORMAL_MODE);
-
-        // we need to wait 50us now since the transceiver could just be going back from standby
-        // datasheet says 40us max, we will be conservative, in the end wait 10 times more cycles
-        for (int i=0; i<CPU_SPEED * 500; i++) {
-            NOP();
-        }
-    }
-}
-
 /**
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
  */
@@ -389,10 +458,10 @@ int main(void) {
     
     // all OK, so start up
     configure();
+    waitForTransceiver(); // to make sure it is healthy and we can sleep all later below
 
     // main loop
     while (TRUE) {
-        wakeUpDevice();
         if (switchPressed) {
             // dropped condition for time check since that would require a timer
             if (!suppressSwitch) {
@@ -406,10 +475,19 @@ int main(void) {
         }
         if (configData) {
             DataItem data = dao_saveData(configData);
-            updateConfigData(&data);
+            updateConfigDataAndReconfigure (&data);
             configData = 0;
         }
-        sleepDevice(); // now need to loop infinitely, interrupt will wake the device up and continue from next instruction -i.e. start of this loop
+        if (canWakeUp) {
+            wakeUpDevice();
+            
+            for (int i=0; i<CPU_SPEED * 5000; i++) {
+                NOP();
+            }
+            canWakeUp = FALSE;
+        }
+        sleepDevice(); // no need to loop infinitely, interrupt will wake the device up and continue from next instruction
+        wakeUpDevice();
     }
     
     return 0;
