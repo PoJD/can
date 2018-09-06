@@ -69,6 +69,20 @@ void configureSpeed() {
     WDTCONbits.SRETEN = 1; 
 }
 
+void enableInputInterrupts(boolean enable) {
+    // clear the interrupt flags (could be set before)
+    INTCONbits.INT0IF = 0;
+    INTCON3bits.INT1IF = 0;
+    INTCONbits.RBIF = 0;
+        
+    // till now enable/disable external interrupt (change on portb0:1, skip 2 and 3 due to CAN)
+    INTCONbits.INT0IE = enable;
+    INTCON3bits.INT1IE = enable;
+    
+    // the same for interrupt on change (change on portb4:7)
+    INTCONbits.RBIE = enable;
+}
+
 void configureInput() {
     // only configure B ports - all as inputs except for RB2 and RB3 which are used as CANRX and CANTX, but will leave that setting to configure can
     // all other shared functionality on the pin is disabled by default, so no need to override anything
@@ -100,18 +114,7 @@ void configureInput() {
     for (byte i=0; i<5; i++) {
         NOP();
     }
-
-    // now clear the interrupt flags (could be set on startup)
-    INTCONbits.INT0IF = 0;
-    INTCON3bits.INT1IF = 0;
-    INTCONbits.RBIF = 0;
-        
-    // till now enable external interrupt (change on portb0:1, skip 2 and 3 due to CAN)
-    INTCONbits.INT0IE = 1;
-    INTCON3bits.INT1IE = 1;
-    
-    // the same for interrupt on change (change on portb4:7)
-    INTCONbits.RBIE = 1;
+    enableInputInterrupts(TRUE);
 }
 
 void configureTimer() {
@@ -170,34 +173,21 @@ void configure() {
  * Input and timer processing
  */
 
-void portBChanged() {
-    // read PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
-    // since B2 and B3 should not be used (CANRX and CANTX), shift all by 2 bits to right and take the lowest 2 bits to that - effectively dropping original bits 2 and 3
-    // reverse it first so that the main routine can rely on 1 meaning the respective input is ON
-    byte portReverse = ~PORTB;
-    // 1 instruction cycle after read is mandated in datasheet!
-    portbStatus = ((portReverse >> 2) & 0b11111100) + (portReverse & 0b11);
-    
-    // change the flag to let the main thread handle input change
-    switchPressed = TRUE;
-}
-
 void checkInputChanged() {
-    // check if external input change is enabled and interrupt flag set (B0)
-    if (INTCONbits.INT0IE && INTCONbits.INT0IF) {
-        portBChanged();
-        INTCONbits.INT0IF = 0; // clear the interrupt
-    }
-    // B1
-    if (INTCON3bits.INT1IE && INTCON3bits.INT1IF) {
-        portBChanged();
-        INTCON3bits.INT1IF = 0;
-    }
-
+    // check if external input change is enabled and interrupt flag set (B0 and B1)
     // check if input on change is enabled and interrupt flag set (B4:B7)
-    if (INTCONbits.RBIE && INTCONbits.RBIF) {
-        portBChanged();
-        INTCONbits.RBIF = 0; // clear the interrupt
+    if ( (INTCONbits.INT0IE && INTCONbits.INT0IF) || (INTCON3bits.INT1IE && INTCON3bits.INT1IF) || (INTCONbits.RBIE && INTCONbits.RBIF) ) {
+        // read PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
+        // since B2 and B3 should not be used (CANRX and CANTX), shift all by 2 bits to right and take the lowest 2 bits to that - effectively dropping original bits 2 and 3
+        // reverse it first so that the main routine can rely on 1 meaning the respective input is ON
+        byte portReverse = ~PORTB;
+        // 1 instruction cycle after read is mandated in datasheet!
+        portbStatus = ((portReverse >> 2) & 0b11111100) + (portReverse & 0b11);
+
+        // change the flag to let the main thread handle input change
+        switchPressed = TRUE;
+        // disable the interrupts now and clear all flags - will act as a tiny SW debouncer
+        enableInputInterrupts(FALSE);
     }
 }
 
@@ -328,7 +318,12 @@ void sleepDevice() {
         // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
         switchTransceiverOff();
         // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
+        // delay enabling the interrupts to the last possible moment to increase delay for SW debouncer
+        enableInputInterrupts(TRUE);
         Sleep();
+    } else {
+        // just enable the interrupts here
+        enableInputInterrupts(TRUE);
     }
 }
 
