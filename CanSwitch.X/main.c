@@ -409,19 +409,20 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     message.dataLength = (messageType == HEARTBEAT) ? 6:1;
 
     // Data = toggle switch (use API between this and CanRelay)
-    message.data[0] = COMPLEX_OPERATOR_SWITCH;
+    byte* data = &message.data;
+    *data++ =  COMPLEX_OPERATOR_SWITCH;
     unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
         // whole 2nd byte = CAN transmit error count read from the register
-        message.data[1] = TXERRCNT;
+        *data++ = TXERRCNT;
         // whole 3rd byte = CAN receive error count read from the register
-        message.data[2] = RXERRCNT;
+        *data++ = RXERRCNT;
         // another byte = firmware version
-        message.data[3] = FIRMWARE_VERSION;
+        *data++ = FIRMWARE_VERSION;
         // last 2 bytes = time since start. Ignore any values higher, only used in debugging anyway
-        message.data[4] = (timeSinceStart >> 8) & MAX_8_BITS;
-        message.data[5] = timeSinceStart & MAX_8_BITS;
+        *data++ = (timeSinceStart >> 8) & MAX_8_BITS;
+        *data++ = timeSinceStart & MAX_8_BITS;
     }
     // use the synchronous version to make sure the message is really sent before moving on
     can_sendSynchronous(&message);
