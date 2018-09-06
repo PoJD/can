@@ -15,7 +15,7 @@
 #include "dao.h"
 #include "canSwitches.h"
 
-#define BAUD_RATE 10 // speed in kbps
+#define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
 #define FIRMWARE_VERSION 1
 
