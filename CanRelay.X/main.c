@@ -30,9 +30,8 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
 
 /** received node ID over CAN */
 byte receivedNodeID = 0;
-/** received data over CAN */
+/** received data over CAN. Should never be 0, if it is, this relay would ignore such traffic anyway */
 byte receivedDataByte = 0;
-boolean receivedData = FALSE;
 
 /*
  * Setup section
@@ -96,20 +95,17 @@ void configure() {
 void checkCanMessageReceived() {
     // check if CAN receive buffer 0 interrupt is enabled and interrupt flag set
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
-        // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
+        // now confirm the buffer 0 is full
         if (RXB0CONbits.RXFUL) {
             // we can only receive normal and complex messages, so we need to know the canID
             CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
-            // also ignore highest bit of node ID = floor
+            // also ignore highest bit of node ID = floor and take just 1st byte of data - never more
             receivedNodeID = header.nodeID & MAX_7_BITS;
-            // also take the 1st byte of data
             receivedDataByte = RXB0D0;
-            // the main thread will process this message then
-            receivedData = TRUE;
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
-        PIR5bits.RXB0IF = 0; // clear the interrupt
+        PIR5bits.RXB0IF = 0; // clear the interrupt flag now
     }    
 }
 
@@ -186,8 +182,14 @@ void sendCanMessageWithAllPorts() {
     can_send(&message);
 }
 
+void eraseReceivedCanMessage() {
+    receivedNodeID = 0;
+    receivedDataByte = 0;
+}
+
 void processIncomingTraffic() {
     if (receivedDataByte == COMPLEX_OPERATOR_GET) {
+        eraseReceivedCanMessage(); // we no longer need the message and can allow other messages to be received
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
         if (receivedNodeID > 0) {
@@ -215,11 +217,8 @@ void processIncomingTraffic() {
             performOperation (receivedDataByte, &PORTB, 0b11111111);
             performOperation (receivedDataByte, &PORTC, 0b11111111);
         }
+        eraseReceivedCanMessage();
     }
-    
-    receivedNodeID = 0;
-    receivedDataByte = 0;
-    receivedData = FALSE;
 }
 
 /**
@@ -237,8 +236,8 @@ int main(void) {
     
     // main loop
     while (TRUE) {
-        // received a message over CAN, so react to that
-        if (receivedData) {
+        // received a message over CAN, so react to that - databyte is never null, if it is, we would just ignore it anyway
+        if (receivedDataByte) {
             processIncomingTraffic();
         }
     }
