@@ -34,7 +34,9 @@ byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
  */
 
 /** was the switch pressed? */
-boolean switchPressed = FALSE;
+volatile boolean switchPressed = FALSE;
+/** current status of PORTB pins detected during the interrupt routine */
+volatile byte portbStatus = 0;
 
 /** 
  * The unsigned longs below would by definition turn to 0 when they reach max. 
@@ -42,15 +44,15 @@ boolean switchPressed = FALSE;
  * which is covered in the main loop. tQuarterSecSinceStart being left the only long not reset in the code to avoid reaching max anywhere */
 
 /** last time (in quarter of seconds) when a switch was pressed */
-unsigned long tLastSwitchQuarterSec = 0;
+volatile unsigned long tLastSwitchQuarterSec = 0;
 
 /** timer data */
-boolean timerElapsed = FALSE;
-unsigned long tQuarterSecSinceStart = 0;
-unsigned long tSecsSinceHeartbeat = 0;
+volatile boolean timerElapsed = FALSE;
+volatile unsigned long tQuarterSecSinceStart = 0;
+volatile unsigned long tSecsSinceHeartbeat = 0;
 
 /** config data - if a config CAN message was sent */
-int configData = 0;
+volatile int configData = 0;
 
 
 /*
@@ -66,10 +68,9 @@ void configureSpeed() {
 }
 
 void configureInput() {
-    // only configure B ports - since only B3:B0 have the external interrupt change feature, we need that...
-    // so we configure B0 only 
+    // only configure B ports - all as inputs
     // all other shared functionality on the pin is disabled by default, so no need to override anything
-    TRISB = 0b00000001;
+    TRISB = 0b11111111;
     
     // configure other ports as outputs as set to 0
     TRISA = 0;
@@ -82,22 +83,39 @@ void configureInput() {
     ANCON0 = 0;
     ANCON1 = 0;
     
-    // enable weak pull ups (only for the enabled input)
+    // enable weak pull ups for all B ports
     INTCON2bits.RBPU = 0;
-    WPUBbits.WPUB0 = 1;
+    WPUB = 0b11111111;
+        
+    // interrupt on falling change (pull up keep it high, only interrupt on "value down")
+    INTCON2bits.INTEDG0 = 0;
+    INTCON2bits.INTEDG1 = 0;
+    INTCON2bits.INTEDG2 = 0;
+    INTCON2bits.INTEDG3 = 0;
+    
+    // enable all interrupts on change on b4:7
+    IOCB = 0b11110000;
     
     // now wait some time for the above false triggers to sink in before enabling the interrupt below
     for (byte i=0; i<5; i++) {
         NOP();
     }
-    
-    // now clear the interrupt flag (could be set on startup)
+
+    // now clear the interrupt flags (could be set on startup)
     INTCONbits.INT0IF = 0;
-    
-    // interrupt on falling change (pull up keep it high, only interrupt on "value down")
-    INTCON2bits.INTEDG0 = 0;
-    // till now enable external interrupt 0 (PORTB0 change)
+    INTCON3bits.INT1IF = 0;
+    INTCON3bits.INT2IF = 0;
+    INTCON3bits.INT3IF = 0;
+    INTCONbits.RBIF = 0;
+        
+    // till now enable external interrupt (change on portb0:3)
     INTCONbits.INT0IE = 1;
+    INTCON3bits.INT1IE = 1;
+    INTCON3bits.INT2IE = 1;
+    INTCON3bits.INT3IE = 1;
+    
+    // the same for interrupt on change (change on portb4:7)
+    INTCONbits.RBIE = 1;
 }
 
 void configureTimer() {
@@ -139,9 +157,11 @@ void configureCan() {
     // switch CAN to normal mode (using real underlying CAN)
     can_setMode(NORMAL_MODE);
     
-    // now enable CAN interrupts    
-    PIE5bits.ERRIE = 1;  // Enable CAN BUS error interrupt
-    PIE5bits.TXB0IE = 1; // Enable Transmit Buffer 0 Interrupt
+    // now enable CAN interrupts (only in debug mode, otherwise not needed and not used, just unnecessary load)
+    if (DEBUG) {
+        PIE5bits.ERRIE = 1;  // Enable CAN BUS error interrupt
+        PIE5bits.TXB0IE = 1; // Enable Transmit Buffer 0 Interrupt        
+    }
 }
 
 void configure() {
@@ -154,11 +174,41 @@ void configure() {
  * Input and timer processing
  */
 
+void portBChanged() {
+    // read the PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
+    portbStatus = PORTB;
+    
+    // 1 instruction cycle after read is mandated in datasheet, we will use it to
+    // change the flag to let the main thread handle input change
+    switchPressed = TRUE;
+}
+
 void checkInputChanged() {
-    // check if external input change is enabled and interrupt flag set (we know we will only be notified on falling edge)
+    // check if external input change is enabled and interrupt flag set (B0)
     if (INTCONbits.INT0IE && INTCONbits.INT0IF) {
-        switchPressed = TRUE; // and change the flag to let the main thread handle this message
+        portBChanged();
         INTCONbits.INT0IF = 0; // clear the interrupt
+    }
+    // B1
+    if (INTCON3bits.INT1IE && INTCON3bits.INT1IF) {
+        portBChanged();
+        INTCON3bits.INT1IF = 0;
+    }
+    // B2
+    if (INTCON3bits.INT2IE && INTCON3bits.INT2IF) {
+        portBChanged();
+        INTCON3bits.INT2IF = 0;
+    }
+    // B3
+    if (INTCON3bits.INT3IE && INTCON3bits.INT3IF) {
+        portBChanged();
+        INTCON3bits.INT3IF = 0;
+    }
+
+    // check if input on change is enabled and interrupt flag set (B4:B7)
+    if (INTCONbits.RBIE && INTCONbits.RBIF) {
+        portBChanged();
+        INTCONbits.RBIF = 0; // clear the interrupt
     }
 }
 
@@ -354,13 +404,13 @@ boolean initConfigData() {
     return TRUE;
 }
 
-void sendCanMessage(MessageType messageType) {
+void sendCanMessage(MessageType messageType, byte portBPin) {
     // just 1 blink until next timer interrupt
     //switchStatusLedOn();
     messageStatus.timestamp = tQuarterSecSinceStart;
     
     CanHeader header;
-    header.nodeID = nodeID;
+    header.nodeID = nodeID + portBPin; // for B0 directly nodeID is sent, up to nodeId+7 depending on which pin was set
     header.messageType = messageType;
     
     CanMessage message;
@@ -394,19 +444,25 @@ int main(void) {
     
     // all OK, so start up
     configure();
-
-    // main loop
+    
+    byte highPins = 0;
     while (TRUE) {
         wakeUpDevice();
         if (switchPressed) {
             // dropped condition for time check since that would require a timer
             if (!suppressSwitch) {
-                sendCanMessage(NORMAL);
+                // now loop through all PORTB pins as were set in interrupt routine and for all low (could be multiple), send a CAN message out
+                highPins = ~portbStatus; // since we only trigger upon a pin being 0 due to weak pull ups by default
+                for (int i=0; i<8; i++) {
+                    if (highPins & (1 << i)) {
+                        sendCanMessage(NORMAL, i);
+                    }
+                }
             }
             switchPressed = FALSE;
         }
         if (timerElapsed) {
-            sendCanMessage(HEARTBEAT);
+            sendCanMessage(HEARTBEAT, 0);
             timerElapsed = FALSE;
         }
         if (configData) {
