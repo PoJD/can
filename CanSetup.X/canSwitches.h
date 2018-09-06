@@ -53,6 +53,15 @@ typedef enum {
     FIRST = 0b10000000
 } Floor;
 
+/**
+ * Operators (CAN data) sent over CAN bus for a given node ID.
+ */
+
+#define COMPLEX_OPERATOR_SWITCH 0b10000000
+#define COMPLEX_OPERATOR_SET    0b01000000
+#define COMPLEX_OPERATOR_CLEAR  0b00100000
+#define COMPLEX_OPERATOR_GET    0b00010000
+
 #ifdef	__cplusplus
 }
 #endif

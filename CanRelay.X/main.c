@@ -17,11 +17,6 @@
 #define BAUD_RATE 10 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
 
-#define COMPLEX_OPERATOR_SWITCH 0b10000000
-#define COMPLEX_OPERATOR_SET    0b01000000
-#define COMPLEX_OPERATOR_CLEAR  0b00100000
-#define COMPLEX_OPERATOR_GET    0b00010000
-
 /** 
  * These should be constants really (written and read from EEPROM)
  */

@@ -18,10 +18,11 @@ Everything was implemented using microcontroller PIC18F25K80, but assuming Micro
 This project is the can switch implementation. The plan is to program the wall switches for lights with this project. 
 Key features:
 
-* It does simply send a CAN message upon an input change (high to low) on PORTB5. The CAN ID is read from EEPROM. The data contains just the switch state (so 0 all the time)
-* It does send regular heartbeat messages (5mins interval by default) with the state of the port B (most likely high then). Together with this information, it also reads the error counts from CAN controller (receive and send error count)
-* It also supports CONFIG messages being sent to the node to update nodeID or heartbeat timeout or a flag to suppress the switch
-* Uses port RC1 as a "status port"
+* It does simply send a CAN message upon an input change (high to low) on PORTB0..PORTB7 except PORTB2 and PORTB3 which are used for CAN. The CAN ID is read from EEPROM. The data contains just the switch state (so 0 all the time)
+* The switch now supports wiring up to 6 real wall switches to minimize the need to have PCB in each wall switch. This switch can then send CAN message for any of the 6 B port input changes to logical zero. Only 6 since PORTB2 and PORTB3 are used by CAN already. The switch then sends CAN ID of nodeID + PORTB pin number, e.g. nodeID directly for change on B0, nodeID+1 for change on B1, nodeID+2 on B4, nodeID+3 on B5, nodeID+4 on B6. nodeID+5 on B7
+* It does send regular heartbeat messages (10sec interval by default) with the state of the port B (most likely high then). Together with this information, it also reads the error counts from CAN controller (receive and send error count), firmware version and time since start
+* It also supports CONFIG messages being sent to the node to update nodeID or heartbeat timeout or a flag to suppress the switch (only in DEBUG mode)
+* Uses port RC1 as a "status port" in DEBUG mode
  * It blinks shortly (1/4 of a second) after a button is pressed to indicate that works
  * Followed by either 1sec long blink to indicate CAN message sent OK or 4 short blinks in a sec to indicate a CAN error
 

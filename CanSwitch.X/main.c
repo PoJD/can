@@ -13,6 +13,7 @@
 #include "utils.h"
 #include "can.h"
 #include "dao.h"
+#include "canSwitches.h"
 
 #define BAUD_RATE 10 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
@@ -407,8 +408,8 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     // data length - equal to 6 for heartbeat and 1 for normal messages
     message.dataLength = (messageType == HEARTBEAT) ? 6:1;
 
-    // 1st byte would always be all PORTB status - not really needed for NORMAL messages anyway, may be handy for heartbeats and troubleshooting
-    message.data[0] = switchPressed << 7;
+    // Data = toggle switch (use API between this and CanRelay)
+    message.data[0] = COMPLEX_OPERATOR_SWITCH;
     unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
