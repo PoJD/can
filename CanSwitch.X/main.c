@@ -69,7 +69,7 @@ void configureSpeed() {
 }
 
 void configureInput() {
-    // only configure B ports - all as inputs
+    // only configure B ports - all as inputs except for RB2 and RB3 which are used as CANRX and CANTX, but will leave that setting to configure can
     // all other shared functionality on the pin is disabled by default, so no need to override anything
     TRISB = 0b11111111;
     
@@ -84,15 +84,13 @@ void configureInput() {
     ANCON0 = 0;
     ANCON1 = 0;
     
-    // enable weak pull ups for all B ports
+    // enable weak pull ups for all B ports (except for B2 and B3)
     INTCON2bits.RBPU = 0;
-    WPUB = 0b11111111;
+    WPUB = 0b11110011;
         
-    // interrupt on falling change (pull up keep it high, only interrupt on "value down")
+    // interrupt on falling change (pull up keep it high, only interrupt on "value down", skip ports 2 and 3 due to CAN)
     INTCON2bits.INTEDG0 = 0;
     INTCON2bits.INTEDG1 = 0;
-    INTCON2bits.INTEDG2 = 0;
-    INTCON2bits.INTEDG3 = 0;
     
     // enable all interrupts on change on b4:7
     IOCB = 0b11110000;
@@ -105,15 +103,11 @@ void configureInput() {
     // now clear the interrupt flags (could be set on startup)
     INTCONbits.INT0IF = 0;
     INTCON3bits.INT1IF = 0;
-    INTCON3bits.INT2IF = 0;
-    INTCON3bits.INT3IF = 0;
     INTCONbits.RBIF = 0;
         
-    // till now enable external interrupt (change on portb0:3)
+    // till now enable external interrupt (change on portb0:1, skip 2 and 3 due to CAN)
     INTCONbits.INT0IE = 1;
     INTCON3bits.INT1IE = 1;
-    INTCON3bits.INT2IE = 1;
-    INTCON3bits.INT3IE = 1;
     
     // the same for interrupt on change (change on portb4:7)
     INTCONbits.RBIE = 1;
@@ -176,10 +170,13 @@ void configure() {
  */
 
 void portBChanged() {
-    // read the PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
-    portbStatus = PORTB;
+    // read PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
+    // since B2 and B3 should not be used (CANRX and CANTX), shift all by 2 bits to right and take the lowest 2 bits to that - effectively dropping original bits 2 and 3
+    // reverse it first so that the main routine can rely on 1 meaning the respective input is ON
+    byte portReverse = ~PORTB;
+    // 1 instruction cycle after read is mandated in datasheet!
+    portbStatus = ((portReverse >> 2) & 0b11111100) + (portReverse & 0b11);
     
-    // 1 instruction cycle after read is mandated in datasheet, we will use it to
     // change the flag to let the main thread handle input change
     switchPressed = TRUE;
 }
@@ -194,16 +191,6 @@ void checkInputChanged() {
     if (INTCON3bits.INT1IE && INTCON3bits.INT1IF) {
         portBChanged();
         INTCON3bits.INT1IF = 0;
-    }
-    // B2
-    if (INTCON3bits.INT2IE && INTCON3bits.INT2IF) {
-        portBChanged();
-        INTCON3bits.INT2IF = 0;
-    }
-    // B3
-    if (INTCON3bits.INT3IE && INTCON3bits.INT3IF) {
-        portBChanged();
-        INTCON3bits.INT3IF = 0;
     }
 
     // check if input on change is enabled and interrupt flag set (B4:B7)
@@ -452,16 +439,15 @@ int main(void) {
     // all OK, so start up
     configure();
     
-    byte highPins = 0;
     while (TRUE) {
         wakeUpDevice();
         if (switchPressed) {
             // dropped condition for time check since that would require a timer
             if (!suppressSwitch) {
                 // now loop through all PORTB pins as were set in interrupt routine and for all low (could be multiple), send a CAN message out
-                highPins = ~portbStatus; // since we only trigger upon a pin being 0 due to weak pull ups by default
+                // we have 1s there where the input is on right now (weak pull ups but reverted in portbChanged function)
                 for (int i=0; i<8; i++) {
-                    if (highPins & (1 << i)) {
+                    if (portbStatus & (1 << i)) {
                         sendCanMessage(NORMAL, i);
                     }
                 }
