@@ -16,6 +16,7 @@
 
 #define BAUD_RATE 10 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
+#define FIRMWARE_VERSION 1
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -171,14 +172,15 @@ void sendCanMessageWithAllPorts() {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 5 since we are sending all PORTA, PORTB and PORTC together with error registers
-    message.dataLength = 5;
+    // data length - equal to 6 since we are sending all PORTA, PORTB and PORTC together with error registers and firmware version
+    message.dataLength = 6;
     byte* data = &message.data;
     *data++ = PORTA;
     *data++ = PORTB;
     *data++ = PORTC;
     *data++ = TXERRCNT;
     *data++ = RXERRCNT;
+    *data++ = FIRMWARE_VERSION;
     
     can_send(&message);
 }
@@ -193,7 +195,7 @@ void processIncomingTraffic() {
             // need to flip/set/clear the respective bit in respective PORT - shift by 0 up to 7 bits
 
             // find out the number in 0..7 - to find out the respective bit to change
-            // simply decrease by 1 and take just the 3 bits. The move it to find out the shift we need below
+            // simply decrease by 1 and take just the 3 bits. Then move it to find out the shift we need below
             byte shift = 1 << ((receivedNodeID-1) & 0b111);
 
             volatile byte* port;
