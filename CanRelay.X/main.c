@@ -166,7 +166,8 @@ void performOperation (byte receivedDataByte, volatile byte* port, byte shift) {
 
 void sendCanMessageWithAllPorts() {
     CanHeader header;
-    header.nodeID = 0; // the only time we are sending 0 as node ID
+    // set node ID to be the very first node ID on the given floor so that we can find out what relay is actually replying
+    header.nodeID = floor;
     header.messageType = COMPLEX_REPLY;
     
     CanMessage message;
