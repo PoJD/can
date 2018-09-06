@@ -16,6 +16,7 @@
 
 #define BAUD_RATE 10 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
+#define FIRMWARE_VERSION 1
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -416,17 +417,23 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 3 for heartbeat and 1 for normal messages
-    // (1 byte is enough for the 1 bit of data only so far (is it switched on) + few more byte more for error counts)
-    message.dataLength = (messageType == HEARTBEAT) ? 3:1;
-    // 1st byte 1st bit = is the switch on?
+    // data length - equal to 6 for heartbeat and 1 for normal messages
+    message.dataLength = (messageType == HEARTBEAT) ? 6:1;
+
+    // 1st byte would always be all PORTB status - not really needed for NORMAL messages anyway, may be handy for heartbeats and troubleshooting
     message.data[0] = switchPressed << 7;
+    unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
         // whole 2nd byte = CAN transmit error count read from the register
         message.data[1] = TXERRCNT;
         // whole 3rd byte = CAN receive error count read from the register
         message.data[2] = RXERRCNT;
+        // another byte = firmware version
+        message.data[3] = FIRMWARE_VERSION;
+        // last 2 bytes = time since start. Ignore any values higher, only used in debugging anyway
+        message.data[4] = (timeSinceStart >> 8) & MAX_8_BITS;
+        message.data[5] = timeSinceStart & MAX_8_BITS;
     }
     // use the synchronous version to make sure the message is really sent before moving on
     can_sendSynchronous(&message);
