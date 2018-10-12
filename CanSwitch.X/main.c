@@ -73,22 +73,26 @@ void enableInputInterrupts(boolean enable) {
     // clear the interrupt flags (could be set before)
     INTCONbits.INT0IF = 0;
     INTCON3bits.INT1IF = 0;
+    INTCON3bits.INT2IF = 0;
+    INTCON3bits.INT3IF = 0;
     INTCONbits.RBIF = 0;
         
-    // till now enable/disable external interrupt (change on portb0:1, skip 2 and 3 due to CAN)
+    // till now enable/disable external interrupt (change on portb0:3)
     INTCONbits.INT0IE = enable;
     INTCON3bits.INT1IE = enable;
+    INTCON3bits.INT2IE = enable;
+    INTCON3bits.INT3IE = enable;
     
     // the same for interrupt on change (change on portb4:7)
     INTCONbits.RBIE = enable;
 }
 
 void configureInput() {
-    // only configure B ports - all as inputs except for RB2 and RB3 which are used as CANRX and CANTX, but will leave that setting to configure can
+    // only configure B ports - all as inputs
     // all other shared functionality on the pin is disabled by default, so no need to override anything
     TRISB = 0b11111111;
     
-    // configure other ports as outputs as set to 0
+    // configure other ports as outputs as set to 0 (C ports would get set properly later for CAN)
     TRISA = 0;
     TRISC = 0;
     PORTA = 0;
@@ -99,13 +103,15 @@ void configureInput() {
     ANCON0 = 0;
     ANCON1 = 0;
     
-    // enable weak pull ups for all B ports (except for B2 and B3)
+    // enable weak pull ups for all B ports
     INTCON2bits.RBPU = 0;
-    WPUB = 0b11110011;
+    WPUB = 0b11111111;
         
-    // interrupt on falling change (pull up keep it high, only interrupt on "value down", skip ports 2 and 3 due to CAN)
+    // interrupt on falling change on b0-b3 (pull up keep it high, only interrupt on "value down")
     INTCON2bits.INTEDG0 = 0;
     INTCON2bits.INTEDG1 = 0;
+    INTCON2bits.INTEDG2 = 0;
+    INTCON2bits.INTEDG3 = 0;
     
     // enable all interrupts on change on b4:7
     IOCB = 0b11110000;
@@ -140,7 +146,7 @@ void configureInterrupts() {
 }
 
 void configureCan() {
-    can_init();
+    can_initRcPortsForCan();
     
     // first move to CONFIG mode
     can_setMode(CONFIG_MODE);
@@ -174,15 +180,16 @@ void configure() {
  */
 
 void checkInputChanged() {
-    // check if external input change is enabled and interrupt flag set (B0 and B1)
+    // check if external input change is enabled and interrupt flag set (B0:B3)
     // check if input on change is enabled and interrupt flag set (B4:B7)
-    if ( (INTCONbits.INT0IE && INTCONbits.INT0IF) || (INTCON3bits.INT1IE && INTCON3bits.INT1IF) || (INTCONbits.RBIE && INTCONbits.RBIF) ) {
+    if ( (INTCONbits.INT0IE && INTCONbits.INT0IF) || (INTCON3bits.INT1IE && INTCON3bits.INT1IF) ||
+         (INTCON3bits.INT2IE && INTCON3bits.INT2IF) || (INTCON3bits.INT3IE && INTCON3bits.INT3IF) || 
+         (INTCONbits.RBIE && INTCONbits.RBIF) ) {
         // read PORTB as mandated in datasheet to clear the input change mismatch - this would also be used by main thread to send respective CAN message
-        // since B2 and B3 should not be used (CANRX and CANTX), shift all by 2 bits to right and take the lowest 2 bits to that - effectively dropping original bits 2 and 3
         // reverse it first so that the main routine can rely on 1 meaning the respective input is ON
-        byte portReverse = ~PORTB;
-        // 1 instruction cycle after read is mandated in datasheet!
-        portbStatus = ((portReverse >> 2) & 0b11111100) + (portReverse & 0b11);
+        portbStatus = ~PORTB;
+
+        // at least s1 instruction cycle after read is mandated in datasheet to properly clear the interrupt on input!
 
         // change the flag to let the main thread handle input change
         switchPressed = TRUE;
