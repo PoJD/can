@@ -18,34 +18,32 @@ extern "C" {
 /**
  * Node - canSwitch. Note that 1st bit should be reserved for the floor (1 = 1st floor, 0 = ground floor).
  * On purpose the values 128 and 0 are omitted (all 0 except from 1st bit)
- */
+ * 
+ * Each room has up to 8 IDs reserved to it. Since each CanSwitch can have up to 8 input switches connected to it. Can Relay needs to translate the IDs to the respective output pins
+ * once it is clear how many lights each of the room would have. That way we have flexibility built into each of the room and no need to change switches once they are flashed and 
+ * we can also potentially add additional light switches in the house if needed. */
 typedef enum {
     /** ground floor */
-    // 5. 7, 8, 11, 12 should not be used according to CanRelay.X    
-    WORK_ROOM         = 1,
-    GARAGE            = 2,
-    TECHNICAL_ROOM    = 3,
-    BATHROOM_DOWN     = 4,
-    WC_DOWN           = 6,
-    PANTRY            = 9,
-    KITCHEN           = 10,
-    LIVING_ROOM       = 13,
-    LOBBY             = 14,
-    HALL_DOWN         = 15,
-    GUEST_ROOM        = 16,
-    CLEANING_ROOM     = 17,
+    WORK_ROOM_110         = 1,
+    GARAGE_109            = 9,
+    TECHNICAL_ROOM_108    = 17,
+    BATHROOM_DOWN_107     = 25,
+    PANTRY_104            = 33,
+    KITCHEN_103           = 41,
+    LIVING_ROOM_103       = 49,
+    LOBBY_101             = 57,
+    HALL_DOWN_102         = 65,
+    GUEST_ROOM_105        = 73,
+    CLEANING_ROOM_106     = 81,
     
     /** 1st floor */
-    // 128 + (5. 7, 8, 11, 12) should not be used according to CanRelay.X    
-    CHILD_ROOM_1      = 129,
-    CHILD_ROOM_2      = 130,
-    CHILD_BATHROOM    = 131,
-    CHILD_ROOM_3      = 132,
-    CHILD_ROOM_4      = 134,
-    HALL_UP           = 137,
-    BEDROOM           = 138,
-    BEDROOM_BATHROOM  = 141,
-    CLOAK_ROOM        = 142
+    CHILD_ROOM_1_205      = 129,
+    CHILD_ROOM_2_207      = 137,
+    CHILD_BATHROOM_206    = 145,
+    HALL_UP_201           = 153,
+    BEDROOM_202           = 161,
+    BEDROOM_BATHROOM_203  = 169,
+    CLOAK_ROOM_204        = 177
 } CanSwitchNode;
 
 typedef enum {
