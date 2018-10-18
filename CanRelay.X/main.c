@@ -13,29 +13,11 @@
 #include "can.h"
 #include "dao.h"
 #include "canSwitches.h"
+#include "relayMappings.h"
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
 #define FIRMWARE_VERSION 1
-
-#define SWITCH_COUNT 30 // this is the max switch count including all smart and dumb switches (e.g. up to 8 switches per smart CanSwitch)
-
-/**
- * Mapping from canID -> pair of reference to port and bit to change
- */
-struct mapping {
-    int canID; // can ID transmitted over the wire (typically nodeID + x for a given smart wall switch depending on which light switch was pressed in that room)
-    volatile byte* port; // reference to one of the port registers of the chip (e.g. PORTA, PORTB, etc)
-    byte shift; // actual bit shift - which bit in that port range should be changed. only 1 of the 8 bits shall be set to 1 then. E.g. 0b00010000 would represent changing bit 4
-};
-
-/** real mapping to port and bit shifts.
- * TODO think over - would this anyhow match relay silkscreen labels?
- * TODO finish according to the real schema being used on relay */
-struct mapping mappings[SWITCH_COUNT] = {
-    { 1, &PORTB, 0b10000000 },
-    { 9, &PORTC, 0b10000000 }
-};
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -212,21 +194,15 @@ void processIncomingTraffic() {
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
         if (receivedNodeID > 0) {
-            // use the mapping table in this file from nodeId -> (port, bit) to change
-            // for example for nodeID we need to change PORTB, bit 2
-            // the port is a direct reference, the bit itself is kept as binary - with 1 only on the bit to set and 0 at remaining positions
-            byte shift = 1 << ((receivedNodeID-1) & 0b111);
+            // use the mapping routine from nodeID -> (port, bit) to change
+            // for example for nodeID 5 we need to change say PORTB, bit 2
+            const mapping* mapElement = canIDToPortMapping(receivedNodeID);
+            if (mapElement) {
+                volatile byte* port = mapElement->port;
+                byte shift = mapElement->shift;
 
-            volatile byte* port;
-            if (receivedNodeID>0 && receivedNodeID<=8) {
-                port = &PORTA;
-            } else if (receivedNodeID>8 && receivedNodeID<=16) {
-                port = &PORTB;
-            } else if (receivedNodeID>16 && receivedNodeID<=24) {
-                port = &PORTC;
+                performOperation (receivedDataByte, port, shift);
             }
-
-            performOperation (receivedDataByte, port, shift);
         } else {
             // node ID 0 - means do the same operations as above, but for all ports
             performOperation (receivedDataByte, &PORTA, 0b11111111);
