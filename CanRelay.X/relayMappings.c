@@ -11,14 +11,35 @@
 #include "canSwitches.h"
 #include "relayMappings.h"
 
-const mapping* canIDToPortMapping(byte canID) {
-    const mapping* m = mappings;
-    const mapping* mEnd = m + sizeof(mappings)/sizeof(mappings[0]);
+/*
+ * Private methods
+ */
+
+const mapping* getMappingForFloor (Floor floor) {
+    return floor==GROUND ? mappingsGround : mappingsFirst;
+}
+
+byte sizeOfMapping (const mapping* m) {
+    return sizeof(m)/sizeof(m[0]);
+}
+
+/*
+ * API methods
+ */
+
+byte activeSwitchesCount (Floor floor) {
+    const mapping* m = getMappingForFloor(floor);
+    return sizeOfMapping(m);
+}
+
+const mapping* canIDToPortMapping(Floor floor, byte canID) {
+    const mapping* m = getMappingForFloor(floor);
+    const mapping* mEnd = m + sizeOfMapping(m);
     for (; m < mEnd; m++) {
         if (m->canID == canID) {
             return m;
         }
     }
     
-    return 0; // should never happen, means we got a nodeID we do not understand
+    return NULL; // should never happen, means we got a canID we do not understand
 }

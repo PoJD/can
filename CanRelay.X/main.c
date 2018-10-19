@@ -48,9 +48,13 @@ void configureOutputs() {
     TRISA = 0;
     TRISB = 0;
     TRISC = 0;
+    TRISD = 0;
+    TRISE = 0;
     PORTA = 0;
     PORTB = 0;
     PORTC = 0;
+    PORTD = 0;
+    PORTE = 0;
     
     // disable all analog inputs (set as digital)
     ANCON0 = 0;
@@ -170,12 +174,15 @@ void sendCanMessageWithAllPorts() {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 6 since we are sending all PORTA, PORTB and PORTC together with error registers and firmware version
-    message.dataLength = 6;
+    // data length - equal to 9 since we are sending all PORTA-PORTE together with actual switch count used, error registers and firmware version
+    message.dataLength = 9;
     byte* data = &message.data;
     *data++ = PORTA;
     *data++ = PORTB;
     *data++ = PORTC;
+    *data++ = PORTD;
+    *data++ = PORTE; // only up to 3 bits used here anyway, so remaining 5 bits are waste, but keeping it simple
+    *data++ = activeSwitchesCount(floor);
     *data++ = TXERRCNT;
     *data++ = RXERRCNT;
     *data++ = FIRMWARE_VERSION;
@@ -196,7 +203,7 @@ void processIncomingTraffic() {
         if (receivedNodeID > 0) {
             // use the mapping routine from nodeID -> (port, bit) to change
             // for example for nodeID 5 we need to change say PORTB, bit 2
-            const mapping* mapElement = canIDToPortMapping(receivedNodeID);
+            const mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
             if (mapElement) {
                 volatile byte* port = mapElement->port;
                 byte shift = mapElement->shift;
@@ -208,6 +215,8 @@ void processIncomingTraffic() {
             performOperation (receivedDataByte, &PORTA, 0b11111111);
             performOperation (receivedDataByte, &PORTB, 0b11111111);
             performOperation (receivedDataByte, &PORTC, 0b11111111);
+            performOperation (receivedDataByte, &PORTD, 0b11111111);
+            performOperation (receivedDataByte, &PORTE, 0b00000111); // only target real E0-E2
         }
         eraseReceivedCanMessage();
     }
