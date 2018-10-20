@@ -174,15 +174,16 @@ void sendCanMessageWithAllPorts() {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 9 since we are sending all PORTA-PORTE together with actual switch count used, error registers and firmware version
-    message.dataLength = 9;
+    // data length - equal to 8 since we are sending all PORTA-PORTE together with actual switch count used, error registers and firmware version
+    message.dataLength = 8;
     byte* data = &message.data;
     *data++ = PORTA;
     *data++ = PORTB;
     *data++ = PORTC;
     *data++ = PORTD;
-    *data++ = PORTE; // only up to 3 bits used here anyway, so remaining 5 bits are waste, but keeping it simple
-    *data++ = activeSwitchesCount(floor);
+    // only up to 3 bits used in PORTE anyway, so combine 3 lowest bits from PORTE with 5 highest bits = active switch count (max is 30)
+    byte count = activeSwitchesCount(floor);
+    *data++ = (PORTE & 0b111) + ( count << 3 ); 
     *data++ = TXERRCNT;
     *data++ = RXERRCNT;
     *data++ = FIRMWARE_VERSION;
@@ -196,14 +197,14 @@ void eraseReceivedCanMessage() {
 }
 
 void processIncomingTraffic() {
-    if (receivedDataByte == COMPLEX_OPERATOR_GET) {
+        if (receivedDataByte == COMPLEX_OPERATOR_GET) {
         eraseReceivedCanMessage(); // we no longer need the message and can allow other messages to be received
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
         if (receivedNodeID > 0) {
             // use the mapping routine from nodeID -> (port, bit) to change
             // for example for nodeID 5 we need to change say PORTB, bit 2
-            const mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
+            mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
             if (mapElement) {
                 volatile byte* port = mapElement->port;
                 byte shift = mapElement->shift;
