@@ -17,7 +17,7 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
-#define FIRMWARE_VERSION 1
+#define FIRMWARE_VERSION 2 // in sync with CanRelay - latest changes for 8 inputs, etc
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -69,14 +69,18 @@ void configureSpeed() {
     WDTCONbits.SRETEN = 1; 
 }
 
-void enableInputInterrupts(boolean enable) {
-    // clear the interrupt flags (could be set before)
+void clearInterruptFlags() {
     INTCONbits.INT0IF = 0;
     INTCON3bits.INT1IF = 0;
     INTCON3bits.INT2IF = 0;
     INTCON3bits.INT3IF = 0;
-    INTCONbits.RBIF = 0;
-        
+    INTCONbits.RBIF = 0;    
+}
+
+void enableInputInterrupts(boolean enable) {
+    // clear the interrupt flags (could be set before)
+    clearInterruptFlags();
+    
     // till now enable/disable external interrupt (change on portb0:3)
     INTCONbits.INT0IE = enable;
     INTCON3bits.INT1IE = enable;
@@ -115,11 +119,12 @@ void configureInput() {
     
     // enable all interrupts on change on b4:7
     IOCB = 0b11110000;
-    
-    // now wait some time for the above false triggers to sink in before enabling the interrupt below
+
+    // now wait some time for potential false triggers to sink in before enabling the interrupt below
     for (byte i=0; i<5; i++) {
         NOP();
     }
+    
     enableInputInterrupts(TRUE);
 }
 
@@ -193,8 +198,7 @@ void checkInputChanged() {
 
         // change the flag to let the main thread handle input change
         switchPressed = TRUE;
-        // disable the interrupts now and clear all flags - will act as a tiny SW debouncer
-        enableInputInterrupts(FALSE);
+        clearInterruptFlags();
     }
 }
 
@@ -325,12 +329,7 @@ void sleepDevice() {
         // apply high on standby pin of transceiver to put it into sleep and low power mode (15uA top from datasheet)
         switchTransceiverOff();
         // enter sleep mode now to be waken up by interrupt later, some other power saving settings also kick in now, for example ultra low power voltage regulator
-        // delay enabling the interrupts to the last possible moment to increase delay for SW debouncer
-        enableInputInterrupts(TRUE);
         Sleep();
-    } else {
-        // just enable the interrupts here
-        enableInputInterrupts(TRUE);
     }
 }
 
