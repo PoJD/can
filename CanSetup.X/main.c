@@ -38,7 +38,7 @@ int main(void) {
     //setupCanSwitch(BEDROOM);
     
     // or setup as CanRelay for ground floor
-    setupCanRelay(GROUND);
+    setupCanRelay(FIRST);
     
     Sleep();
     return 0;

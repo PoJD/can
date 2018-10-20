@@ -104,8 +104,7 @@ void checkCanMessageReceived() {
         if (RXB0CONbits.RXFUL) {
             // we can only receive normal and complex messages, so we need to know the canID
             CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
-            // also ignore highest bit of node ID = floor and take just 1st byte of data - never more
-            receivedNodeID = header.nodeID & MAX_7_BITS;
+            receivedNodeID = header.nodeID;
             receivedDataByte = RXB0D0;
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
@@ -192,11 +191,12 @@ void eraseReceivedCanMessage() {
 }
 
 void processIncomingTraffic() {
-        if (receivedDataByte == COMPLEX_OPERATOR_GET) {
+    if (receivedDataByte == COMPLEX_OPERATOR_GET) {
         eraseReceivedCanMessage(); // we no longer need the message and can allow other messages to be received
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
-        if (receivedNodeID > 0) {
+        // we should only receive nodeIDs >= floor
+        if (receivedNodeID > floor) {
             // use the mapping routine from nodeID -> (port, bit) to change
             // for example for nodeID 5 we need to change say PORTB, bit 2
             mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
@@ -205,14 +205,14 @@ void processIncomingTraffic() {
                 byte shift = 1 << mapElement->portBit;
                 performOperation (receivedDataByte, port, shift);
             }
-        } else {
-            // node ID 0 - means do the same operations as above, but for all ports
+        } else if (receivedNodeID == floor) {
+            // node ID = floor - means do the same operations as above, but for all ports
             performOperation (receivedDataByte, &PORTA, 0b11111111);
             performOperation (receivedDataByte, &PORTB, 0b11111111);
             performOperation (receivedDataByte, &PORTC, 0b11111111);
             performOperation (receivedDataByte, &PORTD, 0b11111111);
             performOperation (receivedDataByte, &PORTE, 0b00000111); // only target real E0-E2
-        }
+        } // < floor should never happen, in case it does, do nothing, probably missconfigured CAN filters
         eraseReceivedCanMessage();
     }
 }
