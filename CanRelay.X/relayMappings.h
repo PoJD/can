@@ -24,19 +24,11 @@ extern "C" {
 typedef struct map {
     byte canID; // can ID transmitted over the wire (typically nodeID + x for a given smart wall switch depending on which light switch was pressed in that room)
     volatile byte* port; // reference to one of the port registers of the chip (e.g. PORTA, PORTB, etc)
-    byte shift; // actual bit shift - which bit in that port range should be changed. only 1 of the 8 bits shall be set to 1 then. E.g. 0b00010000 would represent changing bit 4
+    byte portBit; // actual bit that is to be set/read in this map
 } mapping;
 
 /**
- * Detect number of active switches used for a given floor
- * 
- * @param floor floor to check active switch count for
- * @return number of switches actually connected to outputs
- */
-byte activeSwitchesCount (Floor floor);
-
-/**
- * For a given canID, return a reference to a mapping (port and bit shift). Note that multiple canIDs can map to the same port and bit,
+ * For a given canID, return a reference to a mapping (port and bit to change). Note that multiple canIDs can map to the same port and bit,
  * i.e. we can have more light switches connected to one canSwitch that end up switching on the same light even though they are physically
  * connected to different input pins on CanSwitch and thus sending different canIDs over the wire. It just gives enough flexibility
  * routing the wires in the walls so that hopefully no need to reuse the very same ware among more wall switches.
@@ -46,6 +38,15 @@ byte activeSwitchesCount (Floor floor);
  * @return mapping to use to switch on the respective output or NULL if no such mapping found
  */
 mapping* canIDToPortMapping (Floor floor, byte canID);
+
+/**
+ * Updates the in passed array of byte data with current status of output ports. First byte is always the active switches count. 
+ * Remaining 4 bytes are either filled in with real outputs or set as blank depending on the number of outputs
+ * 
+ * @param floor floor to populate data for
+ * @param data data to get populated by this method, always sets 5 bytes
+ */
+void mapPortsToOutputs(Floor floor, byte* data);
 
 #ifdef	__cplusplus
 }

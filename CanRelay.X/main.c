@@ -17,7 +17,7 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
-#define FIRMWARE_VERSION 1
+#define FIRMWARE_VERSION 2 // for 44pin packages, first version
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -174,19 +174,14 @@ void sendCanMessageWithAllPorts() {
     CanMessage message;
     message.header = &header;
     
-    // data length - equal to 8 since we are sending all PORTA-PORTE together with actual switch count used, error registers and firmware version
+    // data length - equal to 8 since we are sending all outputs together with actual switch count used (5 bytes), error registers and firmware version
     message.dataLength = 8;
     byte* data = &message.data;
-    *data++ = PORTA;
-    *data++ = PORTB;
-    *data++ = PORTC;
-    *data++ = PORTD;
-    // only up to 3 bits used in PORTE anyway, so combine 3 lowest bits from PORTE with 5 highest bits = active switch count (max is 30)
-    byte count = activeSwitchesCount(floor);
-    *data++ = (PORTE & 0b111) + ( count << 3 ); 
-    *data++ = TXERRCNT;
-    *data++ = RXERRCNT;
-    *data++ = FIRMWARE_VERSION;
+    
+    mapPortsToOutputs(floor, data);
+    data[5] = TXERRCNT;
+    data[6] = RXERRCNT;
+    data[7] = FIRMWARE_VERSION;
     
     can_send(&message);
 }
@@ -207,8 +202,7 @@ void processIncomingTraffic() {
             mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
             if (mapElement) {
                 volatile byte* port = mapElement->port;
-                byte shift = mapElement->shift;
-
+                byte shift = 1 << mapElement->portBit;
                 performOperation (receivedDataByte, port, shift);
             }
         } else {
