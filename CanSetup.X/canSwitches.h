@@ -17,7 +17,7 @@ extern "C" {
 
 /**
  * Node - canSwitch. Note that 1st bit should be reserved for the floor (1 = 1st floor, 0 = ground floor).
- * On purpose the values 128 and 0 are omitted (all 0 except from 1st bit)
+ * On purpose the values 128 and 0 are omitted (all 0 except from 1st bit).
  * 
  * Each room has up to 8 IDs reserved to it. Since each CanSwitch can have up to 8 input switches connected to it. Can Relay needs to translate the IDs to the respective output pins
  * once it is clear how many lights each of the room would have. That way we have flexibility built into each of the room and no need to change switches once they are flashed and 
@@ -50,15 +50,6 @@ typedef enum {
     GROUND = 0,
     FIRST = 0b10000000
 } Floor;
-
-/**
- * Operators (CAN data) sent over CAN bus for a given node ID.
- */
-
-#define COMPLEX_OPERATOR_SWITCH 0b10000000
-#define COMPLEX_OPERATOR_SET    0b01000000
-#define COMPLEX_OPERATOR_CLEAR  0b00100000
-#define COMPLEX_OPERATOR_GET    0b00010000
 
 #ifdef	__cplusplus
 }

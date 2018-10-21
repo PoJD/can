@@ -149,16 +149,16 @@ boolean initConfigData() {
     return TRUE;
 }
 
-void performOperation (byte receivedDataByte, volatile byte* port, byte shift) {
+void performOperation (Operation operation, volatile byte* port, byte shift) {
     // see http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
-    switch (receivedDataByte) {
-        case COMPLEX_OPERATOR_SWITCH:
+    switch (operation) {
+        case TOGGLE:
             *port ^= shift;
             break;
-        case COMPLEX_OPERATOR_SET:
+        case ON:
             *port |= shift;
             break;
-        case COMPLEX_OPERATOR_CLEAR:
+        case OFF:
             *port &= ~shift;
             break;
     }
@@ -191,7 +191,10 @@ void eraseReceivedCanMessage() {
 }
 
 void processIncomingTraffic() {
-    if (receivedDataByte == COMPLEX_OPERATOR_GET) {
+    // first take the operation from the data byte
+    Operation operation = can_extractOperationFromDataByte(receivedDataByte);
+    
+    if (operation == GET) {
         eraseReceivedCanMessage(); // we no longer need the message and can allow other messages to be received
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
@@ -203,15 +206,15 @@ void processIncomingTraffic() {
             if (mapElement) {
                 volatile byte* port = mapElement->port;
                 byte shift = 1 << mapElement->portBit;
-                performOperation (receivedDataByte, port, shift);
+                performOperation (operation, port, shift);
             }
         } else if (receivedNodeID == floor) {
             // node ID = floor - means do the same operations as above, but for all ports
-            performOperation (receivedDataByte, &PORTA, 0b11111111);
-            performOperation (receivedDataByte, &PORTB, 0b11111111);
-            performOperation (receivedDataByte, &PORTC, 0b11111111);
-            performOperation (receivedDataByte, &PORTD, 0b11111111);
-            performOperation (receivedDataByte, &PORTE, 0b00000111); // only target real E0-E2
+            performOperation (operation, &PORTA, 0b11111111);
+            performOperation (operation, &PORTB, 0b11111111);
+            performOperation (operation, &PORTC, 0b11111111);
+            performOperation (operation, &PORTD, 0b11111111);
+            performOperation (operation, &PORTE, 0b00000111); // only target real E0-E2
         } // < floor should never happen, in case it does, do nothing, probably missconfigured CAN filters
         eraseReceivedCanMessage();
     }

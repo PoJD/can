@@ -23,9 +23,9 @@
  * These should be constants really (written and read from EEPROM)
  */
 
-/** debug mode utilizes timer, LED status, hearbeats, etc, otherwise low power mode most of the time
- * 
- *  */
+/** 
+ * debug mode utilizes timer, LED status, hearbeats, etc, otherwise low power mode most of the time
+ */
 boolean DEBUG = FALSE;
 boolean suppressSwitch = FALSE;
 int tHeartbeatTimeout = 10; // 10seconds default
@@ -37,6 +37,10 @@ byte nodeID = 0; // is mandated to be non-zero, checked in initConfigData()
 
 /** was the switch pressed? */
 volatile boolean switchPressed = FALSE;
+
+/** counter for pressing the switch */
+volatile unsigned long switchCounter = 0;
+
 /** current status of PORTB pins detected during the interrupt routine */
 volatile byte portbStatus = 0;
 
@@ -198,6 +202,7 @@ void checkInputChanged() {
 
         // change the flag to let the main thread handle input change
         switchPressed = TRUE;
+        switchCounter++;
         clearInterruptFlags();
     }
 }
@@ -409,9 +414,11 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     // data length - equal to 6 for heartbeat and 1 for normal messages
     message.dataLength = (messageType == HEARTBEAT) ? 6:1;
 
-    // Data = toggle switch (use API between this and CanRelay)
+    // data - set operation to be toggle, pass in the other args too to combine first byte all the time
     byte* data = &message.data;
-    *data++ =  COMPLEX_OPERATOR_SWITCH;
+    
+    // the actual encoding/decoding has to match between relay and switch, wrapped inside can method below
+    *data++ = can_combineCanDataByte(TOGGLE, TXERRCNT+RXERRCNT, FIRMWARE_VERSION, switchCounter);
     unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
