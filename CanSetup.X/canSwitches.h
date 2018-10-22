@@ -24,26 +24,26 @@ extern "C" {
  * we can also potentially add additional light switches in the house if needed. */
 typedef enum {
     /** ground floor */
-    WORK_ROOM_110         = 1,
-    GARAGE_109            = 9,
-    TECHNICAL_ROOM_108    = 17,
-    BATHROOM_DOWN_107     = 25,
-    PANTRY_104            = 33,
-    KITCHEN_103           = 41,
-    LIVING_ROOM_103       = 49,
-    LOBBY_101             = 57,
-    HALL_DOWN_102         = 65,
-    GUEST_ROOM_105        = 73,
-    CLEANING_ROOM_106     = 81,
+    WORK_ROOM_110         = 0x1,
+    GARAGE_109            = 0x9,
+    TECHNICAL_ROOM_108    = 0x11,
+    BATHROOM_DOWN_107     = 0x19,
+    PANTRY_104            = 0x21,
+    KITCHEN_103           = 0x29,
+    LIVING_ROOM_103       = 0x31,
+    LOBBY_101             = 0x39,
+    HALL_DOWN_102         = 0x41,
+    GUEST_ROOM_105        = 0x49,
+    CLEANING_ROOM_106     = 0x51,
     
     /** 1st floor */
-    CHILD_ROOM_1_205      = 129,
-    CHILD_ROOM_2_207      = 137,
-    CHILD_BATHROOM_206    = 145,
-    HALL_UP_201           = 153,
-    BEDROOM_202           = 161,
-    BEDROOM_BATHROOM_203  = 169,
-    CLOAK_ROOM_204        = 177
+    CHILD_ROOM_1_205      = 0x81,
+    CHILD_ROOM_2_207      = 0x89,
+    CHILD_BATHROOM_206    = 0x91,
+    HALL_UP_201           = 0x99,
+    BEDROOM_202           = 0xA1,
+    BEDROOM_BATHROOM_203  = 0xA9,
+    CLOAK_ROOM_204        = 0xB1
 } CanSwitchNode;
 
 typedef enum {
