@@ -27,7 +27,7 @@ Key features:
 * As long as the wall switch count does not exceed 8, each can be tight up to individual input pin even if it 2 or more physical light switches should be switching on 1 output pin on CanRelay. Just the respective mapping has to be set properly in https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c (see mapping of ports section in CanRelay)
 * DEBUG mode
     * Disabled by default and needs to be enabled in firmware (defined constant in firmware file)
-    * non DEBUG mode (default) heavily utilizes power savings, putting the chip to sleep using low current drawning specs to minimize power consumption, disabling the crystal, whole chip and even the transceiver, only waken up by input interrupt. Current drawn in sleep measured as low as 1.8uA
+    * non DEBUG mode (default) heavily utilizes power savings, putting the chip to sleep using low current drawning specs to minimize power consumption, disabling the crystal, whole chip and even the transceiver, only waken up by input interrupt. Current drawn in sleep measured as low as 1.8uA. The current drawn in non DEBUG mode is about 18mA instead.
 * Etra features in DEBUG mode
     * supports CONFIG messages being sent to the node to update nodeID or heartbeat timeout or a flag to suppress the switch (it needs to be up in order to receive any CAN traffic, thus this only works in DEBUG mode)
     * timer using the external crystal (crystal by default used only to get clocks for sending the CAN message)
@@ -97,6 +97,8 @@ See below examples as they can be used with the cansend utility (http://elinux.o
 * 202#40.01 - switches on suppress switch on node 2 (pressing the switch on that node after this action will have no effect - no CAN message would get sent)
 * 202#00.03 - changes nodeID for node 2 to nodeID 3 (so after this, the same message would not get processed by the same node again anymore since the nodeID changed)
 * 011#10    - toggles the switch on node 11 (here the number in the data can be any number as long as first 2 bits are 0, i.e. anything from 0 to 3F. Ranges would then tell more about the actual sending chip as per the encoding of the data byte. See https://github.com/PoJD/piclib/blob/master/can.h method can_combineCanDataByte. E.g. for firmware version 1 and no errors the CanSwitch would actually send data byte between 08 and 0F
+* 000#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 0 (using NORMAL message)
+* 080#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 1
 
 #### Complex message types below
 * 311#00 - toggles the switch of the node 11 (any number between 0 and 3F for data)
