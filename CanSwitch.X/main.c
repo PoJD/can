@@ -338,6 +338,17 @@ void sleepDevice() {
     }
 }
 
+/**
+ * Do NOP for in passed umber of microsends. Can be used to actively delay processing instructions, e.g. when waiting for the transceiver to start up.
+ * @param micros number of microsends to do NOP for
+ */
+void nopMicrosends (int micros) {
+    // our speed is in MHz, in other words we can do CPU_SPEED instructions in 1 micro second
+    for (int i=0; i<CPU_SPEED * micros; i++) {
+        NOP();
+    }
+}
+
 void wakeUpDevice() {
     if (!DEBUG) {
         switchTransceiverOn();
@@ -345,9 +356,7 @@ void wakeUpDevice() {
 
         // we need to wait 50us now since the transceiver could just be going back from standby
         // datasheet says 40us max, we will be conservative and do 50us instead
-        for (int i=0; i<CPU_SPEED * 50; i++) {
-            NOP();
-        }
+        nopMicrosends(50);
     }
 }
 

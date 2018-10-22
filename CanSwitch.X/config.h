@@ -32,7 +32,7 @@ extern "C" {
 #pragma config IESO = OFF       // Internal External Oscillator Switch Over Mode (Disabled)
 
 // CONFIG2L
-#pragma config PWRTEN = OFF     // Power Up Timer (Disabled)
+#pragma config PWRTEN = ON      // Power Up Timer (Enabled)
 #pragma config BOREN = NOSLP    // Brown Out Detect (Enabled while active, disabled in SLEEP, SBOREN disabled)
 #pragma config BORV = 3         // Brown-out Reset Voltage bits (1.8V)
 #pragma config BORPWR = ZPBORMV // BORMV Power level (ZPBORMV instead of BORMV is selected)
