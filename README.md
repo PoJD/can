@@ -23,6 +23,7 @@ Key features:
 * It does simply send a CAN message upon an input change (high to low) on PORTB0..PORTB7. 
 * The node ID is read from EEPROM. The message type for these messages is NORMAL (binary 0b000) and so the nodeID effectively becomes the canID being transmitted
 * The data contains just one byte by default that consists of 2bits operation (0b00 = TOGGLE), 1 bit for any CAN registry ERROR, 2 bits for firmware and last 3 bits for switch counter (in non DEBUG mode the only way to see roughly if the wall switch is not bouncing itself after each switch)
+* Typical values in HEX now sent for the CanSwitches (firmware version 0, no errors and toggle) shall be in range 0-7 - just the switch counter in there. For anything larger, a CAN error or new firmware version
 * The switch now supports wiring up to 8 real wall switches to minimize the need to have PCB in each wall switch. This switch can then send CAN message for any of the 8 B port input changes to logical zero. The switch then sends CAN ID of nodeID + PORTB pin number, e.g. nodeID directly for change on B0, nodeID+1 for change on B1, etc
 * As long as the wall switch count does not exceed 8, each can be tight up to individual input pin even if it 2 or more physical light switches should be switching on 1 output pin on CanRelay. Just the respective mapping has to be set properly in https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c (see mapping of ports section in CanRelay)
 * DEBUG mode

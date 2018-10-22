@@ -17,7 +17,7 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
-#define FIRMWARE_VERSION 1
+#define FIRMWARE_VERSION 0 // start with the lowest possible version value since we only can support 4 values max (0-3))
 
 /** 
  * These should be constants really (written and read from EEPROM)
