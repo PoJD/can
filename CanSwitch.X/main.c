@@ -17,7 +17,7 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
-#define FIRMWARE_VERSION 2 // in sync with CanRelay - latest changes for 8 inputs, etc
+#define FIRMWARE_VERSION 1
 
 /** 
  * These should be constants really (written and read from EEPROM)
