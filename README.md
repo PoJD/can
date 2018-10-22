@@ -119,14 +119,15 @@ slcan
 
 ### Start can on odroid:
 * Compile SocketCan on linux - http://elinux.org/Can-utils 
-* Start can using the above: (s2 below is 50kbps)
+* Start can using the above: (s2 below is 50kbps). Using the generic device allows the OS to survive unplug and replug of the USBTin which often results in different ACM* device being set in /dev/
 
 ```bash
 #!/bin/bash 
-
+  
 set -x 
 
-slcan_attach -f -s2 -o /dev/ttyACM0 -n can0 
-slcand ttyACM0 can0 
+device=/dev/ttyACM*
+slcan_attach -f -s2 -o $device -n can0
+slcand $device can0
 ifconfig can0 up
 ```
