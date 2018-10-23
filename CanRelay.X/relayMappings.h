@@ -18,38 +18,77 @@ extern "C" {
 #include "utils.h"
 #include "canSwitches.h"
 
-// how many outputs do physically exist on this CanRelay board?
-#define MAX_OUTPUTS 30
-    
 /**
- * Mapping from canID -> pair of reference to port and bit to change
+ * Output structure represent the pair of reference to port and bit to change
+ * This is a static array inside the firmware to know how to translate from output numbers on the silk screen to individual port bits.
+ * 
+ * The same for each relay
  */
-typedef struct map {
-    byte canID; // can ID transmitted over the wire (typically nodeID + x for a given smart wall switch depending on which light switch was pressed in that room)
+typedef struct {
     volatile byte* port; // reference to one of the port registers of the chip (e.g. PORTA, PORTB, etc)
     byte portBit; // actual bit that is to be set/read in this map
-} mapping;
+} Output;
+
+// how many outputs do physically exist on this CanRelay board?
+#define OUTPUTS_COUNT 30
+
 
 /**
- * For a given canID, return a reference to a mapping (port and bit to change). Note that multiple canIDs can map to the same port and bit,
+ * Mapping from canID -> output, i.e. for a given canID it would keep a reference to the output to know how to "turn it on or off"
+ * This "map" is dynamic, stored in DAO and can be changed dynamically at runtime, e.g. by sending CAN CONFIG messages to the CanRelay.
+ * 
+ * It is not really a real map, merely an array, i.e. it allows dupes too
+ * 
+ * Therefore this would be different for different floors
+ */
+typedef struct {
+    byte canID; // canID to map from (as transmitted over the CAN bus line)
+    Output* output; // output reference
+} Mapping;
+
+// max size of the dynamic mappings. Use max byte size for this since. We also limit this by the CONFIG data schema, where mapping number is just 1 byte 
+#define MAX_MAPPING_SIZE 0xFF
+#define MAPPING_START_DAO_BUCKET 1 // 0 is reserved for floor, so we start from 1
+#define UNMMAPED_CANID MAX_8_BITS // unmapped can ID in the mapping to use as a marker for invalid mapping
+
+/**
+ * Operations
+ */
+
+/**
+ * Initialize mapping using the DAO. This method has to be called in order for the other methods in this header file to work properly!
+ */
+void initMapping();
+
+/**
+ * For a given canID, return a reference to output (port and bit to change). Note that multiple canIDs can map to the same port and bit,
  * i.e. we can have more light switches connected to one canSwitch that end up switching on the same light even though they are physically
  * connected to different input pins on CanSwitch and thus sending different canIDs over the wire. It just gives enough flexibility
  * routing the wires in the walls so that hopefully no need to reuse the very same ware among more wall switches.
  * 
- * @param floor floor to get the mapping for
  * @param canID the canID received on the wire
- * @return mapping to use to switch on the respective output or NULL if no such mapping found
+ * @return Output to use to switch on the respective output or NULL if no such mapping found
  */
-mapping* canIDToPortMapping (Floor floor, byte canID);
+Output* canIDToOutput (byte canID);
 
 /**
  * Updates the in passed array of byte data with current status of output ports. First byte is always the active switches count. 
  * Remaining 4 bytes are either filled in with real outputs or set as blank depending on the number of outputs
  * 
- * @param floor floor to populate data for
  * @param data data to get populated by this method, always sets 5 bytes
  */
-void mapPortsToOutputs(Floor floor, byte* data);
+void retrieveOutputStatus (byte* data);
+
+/**
+ * Trigger to update the respective canIDMapping. This method would make sure this update is permanent (e.g. storing it into DAO) 
+ * and at the same time update any runtime structures holding the data. The caller has to make sure all previous mappings are also set,
+ * otherwise this would be ignored
+ * 
+ * @param mappingNumber
+ * @param mappingCanID
+ * @param mappingOutputNumber
+ */
+void updateMapping (byte mappingNumber, byte mappingCanID, byte mappingOutputNumber);
 
 #ifdef	__cplusplus
 }

@@ -16,19 +16,16 @@
  */
 void setupCanSwitch(CanSwitchNode node) {
     DataItem dataItem;
-    dataItem.dataType = NODE_ID;
+    dataItem.bucket = 0; // check CanSwitch main.c
     dataItem.value = node;
     dao_saveDataItem(&dataItem);
-    
-    DataItem dataOut = dao_loadDataItem(NODE_ID);    
-    printf("Data: %d", dataOut.value);
 }
 /*
  * Sets up EEPROM of this node as a canRelay - using the floor passed in to be set as FLOOR for CanRelay project
  */
 void setupCanRelay(Floor floor) {
     DataItem dataItem;
-    dataItem.dataType = FLOOR;
+    dataItem.bucket = 0; // check CanRelay main.c
     dataItem.value = floor;
     dao_saveDataItem(&dataItem);    
 }

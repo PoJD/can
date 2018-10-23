@@ -167,7 +167,9 @@ boolean initConfigData() {
     }
     floor = dataItem.value;
     
-    // TODO load all can relay mappings
+    // now init relay mapping
+    initMapping();
+    
     return TRUE;
 }
 
@@ -199,7 +201,7 @@ void sendCanMessageWithAllPorts() {
     message.dataLength = 8;
     byte* data = &message.data;
     
-    mapPortsToOutputs(floor, data);
+    retrieveOutputStatus(data);
     data[5] = TXERRCNT;
     data[6] = RXERRCNT;
     data[7] = FIRMWARE_VERSION;
@@ -222,14 +224,12 @@ void processIncomingOperation() {
     } else { // other operations are setting things up
         // we should only receive nodeIDs >= floor
         if (receivedNodeID > floor) {
-            // use the mapping routine from nodeID -> (port, bit) to change
+            // use the mapping routine to get (port, bit) to change using the received nodeID
             // for example for nodeID 5 we need to change say PORTB, bit 2
-            
-            // TODO update to take into account one more mapping from canID to output first
-            mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
-            if (mapElement) {
-                volatile byte* port = mapElement->port;
-                byte shift = 1 << mapElement->portBit;
+            Output* output = canIDToOutput(receivedNodeID);
+            if (output) {
+                volatile byte* port = output->port;
+                byte shift = 1 << output->portBit;
                 performOperation (operation, port, shift);
             }
         } else if (receivedNodeID == floor) {
@@ -273,19 +273,8 @@ int main(void) {
         }
 
         if (receivedMappingNumber) {
-            // majority of checks done by the datatypes themselves, so only check the output number is in range 1.30 as that is real mapping size of relay
-            if (receivedMappingOutputNumber > 0 && receivedMappingNumber <= MAX_OUTPUTS) {
-                DataItem dataItem;
-
-                // receivedMappingNumber shall be a sequence of numbers, so use it as the bucket number to store it into using the DAO
-                // if we received mapping number 0, we ignore it above anyway and that bucket is used by floor in DAO anyway
-                dataItem.bucket = receivedMappingNumber;
-                // value would be canID the higher 8 bits and outputNumber the lower 5 bits
-                dataItem.value = (receivedMappingCanID << 8) + (receivedMappingOutputNumber);
-
-                dao_saveDataItem(&dataItem);
-                // TODO update runtime mapping now
-            }
+            // let the mapping do the magic
+            updateMapping(receivedMappingNumber, receivedMappingCanID, receivedMappingOutputNumber);
             eraseReceivedConfigData();
         }        
     }
