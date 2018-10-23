@@ -17,6 +17,9 @@ extern "C" {
 #include <xc.h>
 #include "utils.h"
 #include "canSwitches.h"
+
+// how many outputs do physically exist on this CanRelay board?
+#define MAX_OUTPUTS 30
     
 /**
  * Mapping from canID -> pair of reference to port and bit to change

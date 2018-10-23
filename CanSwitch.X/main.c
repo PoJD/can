@@ -19,6 +19,12 @@
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
 #define FIRMWARE_VERSION 0 // start with the lowest possible version value since we only can support 4 values max (0-3))
 
+// Addresses of DAO attributes for the switch
+
+#define DAO_ADDRESS_NODE_ID 0
+#define DAO_ADDRESS_SUPPRESS_SWITCH 2
+#define DAO_ADDRESS_HEARTBEAT_TIMEOUT 4
+
 /** 
  * These should be constants really (written and read from EEPROM)
  */
@@ -58,7 +64,7 @@ volatile unsigned long tQuarterSecSinceStart = 0;
 volatile unsigned long tSecsSinceHeartbeat = 0;
 
 /** config data - if a config CAN message was sent */
-volatile int configData = 0;
+volatile int receivedConfigData = 0;
 
 
 /*
@@ -284,7 +290,7 @@ void checkCan() {
         if (RXB0CONbits.RXFUL) {
             // we can only receive config messages, so no need to check what canID did we get
             // form a 16bit int from the 2 incoming bytes and let the main thread process this message then (let the interrupt finish quickly)
-            configData = (RXB0D0 << 8) + RXB0D1;
+            receivedConfigData = (RXB0D0 << 8) + RXB0D1;
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
         PIR5bits.RXB0IF = 0;
@@ -360,18 +366,29 @@ void wakeUpDevice() {
     }
 }
 
+boolean isValidDataItem (DataItem *dataItem) {
+    if (!dao_isValid(dataItem)) {
+        return FALSE;
+    }
+    
+    // in addition to that heartbeat and node ID cannot be 0
+    if (dataItem->address == DAO_ADDRESS_HEARTBEAT_TIMEOUT || dataItem->address == DAO_ADDRESS_NODE_ID) {
+        return dataItem->value ? TRUE : FALSE;
+    }
+    return TRUE;
+}
 
-void updateConfigData(DataItem *data) {
-    if (dao_isValid(data)) {
-        switch (data->dataType) {
-            case HEARTBEAT_TIMEOUT:
-                tHeartbeatTimeout = data->value;
+void updateConfigData(DataItem *dataItem) {
+    if (isValidDataItem(dataItem)) {
+        switch (dataItem->address) {
+            case DAO_ADDRESS_HEARTBEAT_TIMEOUT:
+                tHeartbeatTimeout = dataItem->value;
                 break;
-            case SUPPRESS_SWITCH:
-                suppressSwitch = data->value;
+            case DAO_ADDRESS_SUPPRESS_SWITCH:
+                suppressSwitch = dataItem->value;
                 break;
-            case NODE_ID:
-                nodeID = data->value;
+            case DAO_ADDRESS_NODE_ID:
+                nodeID = dataItem->value;
                 // in this case we also need to configure again to change CAN acceptance filters, etc
                 configure();
                 break;            
@@ -385,8 +402,8 @@ void updateConfigData(DataItem *data) {
  */
 boolean initConfigData() {
     // try nodeID, which is mandatory. If it is not set, then nothing to be done here, so just sleep the device
-    DataItem dataItem = dao_loadDataItem(NODE_ID);
-    if (!dao_isValid(&dataItem)) {
+    DataItem dataItem = dao_loadDataItem(DAO_ADDRESS_NODE_ID);
+    if (!isValidDataItem(&dataItem)) {
         sleepDevice();
     }
     updateConfigData (&dataItem);
@@ -398,11 +415,11 @@ boolean initConfigData() {
     
     // other attributes are not mandatory
     
-    dataItem = dao_loadDataItem(HEARTBEAT_TIMEOUT);
+    dataItem = dao_loadDataItem(DAO_ADDRESS_HEARTBEAT_TIMEOUT);
     updateConfigData (&dataItem);
 
     // even if not written before, reading as 0 is fine and we will treat it as disabled by default
-    dataItem = dao_loadDataItem(SUPPRESS_SWITCH);
+    dataItem = dao_loadDataItem(DAO_ADDRESS_SUPPRESS_SWITCH);
     updateConfigData (&dataItem);
     
     return TRUE;
@@ -477,10 +494,16 @@ int main(void) {
             sendCanMessage(HEARTBEAT, 0);
             timerElapsed = FALSE;
         }
-        if (configData) {
-            DataItem data = dao_saveData(configData);
-            updateConfigData(&data);
-            configData = 0;
+        if (receivedConfigData) {
+            // first 2 bits = address, the other 14 bits = data itself
+            DataItem dataItem;
+            // the 2 bits form the data type, so would be in the range of say 0-3, but we need 2 bytes for each datatype, so shift by 1 then too
+            dataItem.address = (receivedConfigData >> 14) << 1;
+            dataItem.value = MAX_14_BITS & receivedConfigData;
+            
+            dao_saveDataItem(&dataItem);
+            updateConfigData(&dataItem);
+            receivedConfigData = 0;
         }
         sleepDevice(); // now need to loop infinitely, interrupt will wake the device up and continue from next instruction -i.e. start of this loop
     }

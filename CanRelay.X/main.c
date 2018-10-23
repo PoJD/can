@@ -19,6 +19,9 @@
 #define CPU_SPEED 16 // speed in MHz
 #define FIRMWARE_VERSION 2 // for 44pin packages, first version
 
+/** address of the floor of this node in DAO */
+#define DAO_ADDRESS_FLOOR 0
+
 /** 
  * These should be constants really (written and read from EEPROM)
  */
@@ -30,9 +33,14 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
  */
 
 /** received node ID over CAN */
-byte receivedNodeID = 0;
-/** received data over CAN. Should never be 0, if it is, this relay would ignore such traffic anyway */
-byte receivedDataByte = 0;
+volatile byte receivedNodeID = 0;
+/** received data over CAN in the case of operations */
+volatile byte receivedDataByte = 0;
+
+/** config data - if a config CAN message was sent */
+volatile byte receivedMappingNumber = 0;
+volatile byte receivedMappingCanID = 0;
+volatile byte receivedMappingOutputNumber = 0;
 
 /*
  * Setup section
@@ -83,6 +91,11 @@ void configureCan() {
     header.messageType = COMPLEX;
     can_setupFirstBitIdReceiveFilter(&header);
 
+    // last piece is also config messages that canRelay now supports (only changing the mappings). It has to be a strict filter though as opposed to more vague filters above
+    // since CONFIG messages can be also targeted to the individual CanSwitches, so we need to assure the canID is equal the floor
+    header.messageType = CONFIG;
+    can_setupStrictReceiveFilter(&header);
+
     // switch CAN to normal mode
     can_setMode(NORMAL_MODE);
 }
@@ -102,10 +115,26 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // now confirm the buffer 0 is full
         if (RXB0CONbits.RXFUL) {
-            // we can only receive normal and complex messages, so we need to know the canID
+            // see setupCan above for more details, but we can either get NORMAL or COMPLEX or CONFIG messages
             CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
-            receivedNodeID = header.nodeID;
-            receivedDataByte = RXB0D0;
+
+            // NORMAL and COMPLEX messages are the same processing vice
+            if (header.messageType == NORMAL || header.messageType == COMPLEX) {
+                // we need to know the canID (if it is equal to floor that the operation is for all lights)
+                receivedNodeID = header.nodeID;
+                // and we need just 1 byte of data then
+                receivedDataByte = RXB0D0;
+            } else if (header.messageType == CONFIG) {
+                // in the case of CONFIG messages, we do not need the nodeID since we know it is equal to floor as per setupCan where we use strict filter
+                // in this case we expect 3 bytes of data
+                // first byte = number of the mapping - will drive address to store this at in EEPROM
+                // second byte = canID of the mapping
+                // last byte = output to set by this mapping (should be only up to 30 anyway)
+                receivedMappingNumber = RXB0D0;
+                receivedMappingCanID = RXB0D1;
+                receivedMappingOutputNumber = RXB0D2;
+
+            } // should never received other message types
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
@@ -125,27 +154,20 @@ void interrupt handleInterrupt(void) {
  * Action methods here
  */
 
-void updateConfigData(DataItem *data) {
-    if (dao_isValid(data)) {
-        switch (data->dataType) {
-            case FLOOR:
-                floor = data->value;
-                break;
-        }
-    }
-}
-
 /**
  * Reads initial values from DAO and sets the config variables accordingly.
  * @return TRUE if all mandatory values were read OK, false otherwise
  */
 boolean initConfigData() {
-    // try floor, which is mandatory. If it is not set, then return false
-    DataItem dataItem = dao_loadDataItem(FLOOR);
+    // floor is mandatory. If it is not set, then return false (but sleep first)
+    DataItem dataItem = dao_loadDataItem(DAO_ADDRESS_FLOOR);
     if (!dao_isValid(&dataItem)) {
+        Sleep();
         return FALSE;
     }
-    updateConfigData (&dataItem);
+    floor = dataItem.value;
+    
+    // TODO load all can relay mappings
     return TRUE;
 }
 
@@ -185,23 +207,25 @@ void sendCanMessageWithAllPorts() {
     can_send(&message);
 }
 
-void eraseReceivedCanMessage() {
+void eraseReceivedOperationData() {
     receivedNodeID = 0;
     receivedDataByte = 0;
 }
 
-void processIncomingTraffic() {
+void processIncomingOperation() {
     // first take the operation from the data byte
     Operation operation = can_extractOperationFromDataByte(receivedDataByte);
     
     if (operation == GET) {
-        eraseReceivedCanMessage(); // we no longer need the message and can allow other messages to be received
+        eraseReceivedOperationData(); // we no longer need the message and can allow other messages to be received
         sendCanMessageWithAllPorts();
     } else { // other operations are setting things up
         // we should only receive nodeIDs >= floor
         if (receivedNodeID > floor) {
             // use the mapping routine from nodeID -> (port, bit) to change
             // for example for nodeID 5 we need to change say PORTB, bit 2
+            
+            // TODO update to take into account one more mapping from canID to output first
             mapping* mapElement = canIDToPortMapping(floor, receivedNodeID);
             if (mapElement) {
                 volatile byte* port = mapElement->port;
@@ -216,9 +240,16 @@ void processIncomingTraffic() {
             performOperation (operation, &PORTD, 0b11111111);
             performOperation (operation, &PORTE, 0b00000111); // only target real E0-E2
         } // < floor should never happen, in case it does, do nothing, probably missconfigured CAN filters
-        eraseReceivedCanMessage();
+        eraseReceivedOperationData();
     }
 }
+
+void eraseReceivedConfigData() {
+    receivedMappingNumber = 0;
+    receivedMappingCanID = 0;
+    receivedMappingOutputNumber = 0;
+}
+
 
 /**
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
@@ -237,8 +268,25 @@ int main(void) {
     while (TRUE) {
         // received a message over CAN, so react to that - databyte is never null, if it is, we would just ignore it anyway
         if (receivedDataByte) {
-            processIncomingTraffic();
+            processIncomingOperation();
         }
+
+        if (receivedMappingNumber) {
+            // majority of checks done by the datatypes themselves, so only check the output number is in range 1.30 as that is real mapping size of relay
+            if (receivedMappingOutputNumber > 0 && receivedMappingNumber <= MAX_OUTPUTS) {
+                DataItem dataItem;
+
+                // receivedMappingNumber shall be a sequence of numbers, so again multiple by 2 to get the real address
+                // if we received mapping number 0, we ignore it above anyway and that address is used by node ID in eeprom anyway
+                dataItem.address = receivedMappingNumber << 1;
+                // value would be canID the higher 8 bits and outputNumber the lower 5 bits
+                dataItem.value = (receivedMappingCanID << 8) + (receivedMappingOutputNumber);
+
+                dao_saveDataItem(&dataItem);
+                // TODO update runtime mapping now
+            }
+            eraseReceivedConfigData();
+        }        
     }
     
     return 0;
