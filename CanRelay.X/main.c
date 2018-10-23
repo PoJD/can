@@ -19,8 +19,8 @@
 #define CPU_SPEED 16 // speed in MHz
 #define FIRMWARE_VERSION 2 // for 44pin packages, first version
 
-/** address of the floor of this node in DAO */
-#define DAO_ADDRESS_FLOOR 0
+/** bucket of the floor of this node in DAO */
+#define FLOOR_DAO_BUCKET 0
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -160,7 +160,7 @@ void interrupt handleInterrupt(void) {
  */
 boolean initConfigData() {
     // floor is mandatory. If it is not set, then return false (but sleep first)
-    DataItem dataItem = dao_loadDataItem(DAO_ADDRESS_FLOOR);
+    DataItem dataItem = dao_loadDataItem(FLOOR_DAO_BUCKET);
     if (!dao_isValid(&dataItem)) {
         Sleep();
         return FALSE;
@@ -234,6 +234,7 @@ void processIncomingOperation() {
             }
         } else if (receivedNodeID == floor) {
             // node ID = floor - means do the same operations as above, but for all ports
+            // TODO update to only loop through registered outputs (not whole map, just array of really used outputs)
             performOperation (operation, &PORTA, 0b11111111);
             performOperation (operation, &PORTB, 0b11111111);
             performOperation (operation, &PORTC, 0b11111111);
@@ -276,9 +277,9 @@ int main(void) {
             if (receivedMappingOutputNumber > 0 && receivedMappingNumber <= MAX_OUTPUTS) {
                 DataItem dataItem;
 
-                // receivedMappingNumber shall be a sequence of numbers, so again multiple by 2 to get the real address
-                // if we received mapping number 0, we ignore it above anyway and that address is used by node ID in eeprom anyway
-                dataItem.address = receivedMappingNumber << 1;
+                // receivedMappingNumber shall be a sequence of numbers, so use it as the bucket number to store it into using the DAO
+                // if we received mapping number 0, we ignore it above anyway and that bucket is used by floor in DAO anyway
+                dataItem.bucket = receivedMappingNumber;
                 // value would be canID the higher 8 bits and outputNumber the lower 5 bits
                 dataItem.value = (receivedMappingCanID << 8) + (receivedMappingOutputNumber);
 

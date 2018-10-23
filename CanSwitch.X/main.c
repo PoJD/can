@@ -19,11 +19,11 @@
 #define CPU_SPEED 16 // clock speed in MHz (4 clocks made up 1 instruction)
 #define FIRMWARE_VERSION 0 // start with the lowest possible version value since we only can support 4 values max (0-3))
 
-// Addresses of DAO attributes for the switch
+// Buckets of DAO attributes for the switch
 
-#define DAO_ADDRESS_NODE_ID 0
-#define DAO_ADDRESS_SUPPRESS_SWITCH 2
-#define DAO_ADDRESS_HEARTBEAT_TIMEOUT 4
+#define NODE_ID_DAO_BUCKET 0
+#define SUPPRESS_SWITCH_DAO_BUCKET 1
+#define HEARTBEAT_TIMEOUT_DAO_BUCKET 2
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -372,7 +372,7 @@ boolean isValidDataItem (DataItem *dataItem) {
     }
     
     // in addition to that heartbeat and node ID cannot be 0
-    if (dataItem->address == DAO_ADDRESS_HEARTBEAT_TIMEOUT || dataItem->address == DAO_ADDRESS_NODE_ID) {
+    if (dataItem->bucket == HEARTBEAT_TIMEOUT_DAO_BUCKET || dataItem->bucket == NODE_ID_DAO_BUCKET) {
         return dataItem->value ? TRUE : FALSE;
     }
     return TRUE;
@@ -380,14 +380,14 @@ boolean isValidDataItem (DataItem *dataItem) {
 
 void updateConfigData(DataItem *dataItem) {
     if (isValidDataItem(dataItem)) {
-        switch (dataItem->address) {
-            case DAO_ADDRESS_HEARTBEAT_TIMEOUT:
+        switch (dataItem->bucket) {
+            case HEARTBEAT_TIMEOUT_DAO_BUCKET:
                 tHeartbeatTimeout = dataItem->value;
                 break;
-            case DAO_ADDRESS_SUPPRESS_SWITCH:
+            case SUPPRESS_SWITCH_DAO_BUCKET:
                 suppressSwitch = dataItem->value;
                 break;
-            case DAO_ADDRESS_NODE_ID:
+            case NODE_ID_DAO_BUCKET:
                 nodeID = dataItem->value;
                 // in this case we also need to configure again to change CAN acceptance filters, etc
                 configure();
@@ -402,7 +402,7 @@ void updateConfigData(DataItem *dataItem) {
  */
 boolean initConfigData() {
     // try nodeID, which is mandatory. If it is not set, then nothing to be done here, so just sleep the device
-    DataItem dataItem = dao_loadDataItem(DAO_ADDRESS_NODE_ID);
+    DataItem dataItem = dao_loadDataItem(NODE_ID_DAO_BUCKET);
     if (!isValidDataItem(&dataItem)) {
         sleepDevice();
     }
@@ -415,11 +415,11 @@ boolean initConfigData() {
     
     // other attributes are not mandatory
     
-    dataItem = dao_loadDataItem(DAO_ADDRESS_HEARTBEAT_TIMEOUT);
+    dataItem = dao_loadDataItem(HEARTBEAT_TIMEOUT_DAO_BUCKET);
     updateConfigData (&dataItem);
 
     // even if not written before, reading as 0 is fine and we will treat it as disabled by default
-    dataItem = dao_loadDataItem(DAO_ADDRESS_SUPPRESS_SWITCH);
+    dataItem = dao_loadDataItem(SUPPRESS_SWITCH_DAO_BUCKET);
     updateConfigData (&dataItem);
     
     return TRUE;
@@ -495,10 +495,9 @@ int main(void) {
             timerElapsed = FALSE;
         }
         if (receivedConfigData) {
-            // first 2 bits = address, the other 14 bits = data itself
+            // first 2 bits = bucket in DAO, the other 14 bits = data itself
             DataItem dataItem;
-            // the 2 bits form the data type, so would be in the range of say 0-3, but we need 2 bytes for each datatype, so shift by 1 then too
-            dataItem.address = (receivedConfigData >> 14) << 1;
+            dataItem.bucket = (receivedConfigData >> 14);
             dataItem.value = MAX_14_BITS & receivedConfigData;
             
             dao_saveDataItem(&dataItem);
