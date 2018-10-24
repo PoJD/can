@@ -29,6 +29,14 @@ typedef struct {
     byte portBit; // actual bit that is to be set/read in this map
 } Output;
 
+/**
+ * UsedOutputs is a very very simple sort of iterator, really just a pointer with the size to allow external world loop through the used outputs of this CanRelay
+ */
+typedef struct {
+    Output* array;
+    byte size;
+} UsedOutputs;
+
 // how many outputs do physically exist on this CanRelay board?
 #define OUTPUTS_COUNT 30
 
@@ -45,6 +53,15 @@ typedef struct {
     byte nodeID; // nodeID to map from (as transmitted over the CAN bus line)
     Output* output; // output reference
 } Mapping;
+
+/**
+ * Mappings is a very very simple sort of iterator, really just a pointer with the size to wrap the "collection"
+ */
+typedef struct {
+    Mapping* array;
+    byte size;
+} Mappings;
+
 
 // max size of the dynamic mappings. Use max byte size for this since. We also limit this by the CONFIG data schema, where mapping number is just 1 byte 
 #define MAX_MAPPING_SIZE 0xFF
@@ -78,6 +95,12 @@ Output* nodeIDToOutput (byte nodeID);
  * @param data data to get populated by this method, always sets 5 bytes
  */
 void retrieveOutputStatus (byte* data);
+
+/**
+ * Get UsedOutputs structure so that the caller can iterate through all of them and perform actions against them
+ * @return reference to the used outputs (only registered outputs in there)
+ */
+UsedOutputs* getUsedOutputs();
 
 /**
  * Trigger to update the respective nodeIDMapping. This method would make sure this update is permanent (e.g. storing it into DAO) 

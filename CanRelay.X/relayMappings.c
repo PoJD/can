@@ -54,17 +54,41 @@ Output outputs[OUTPUTS_COUNT] = {
 };
 
 /**
+ * Here in the internal size we simply keep the maximum number of output used so far by any mapping (1 based)
+ * This way we keep track of all outputs used and it is assumed that all smaller numbered outputs are used as well (to avoid extra logic looping through all used all the time when matching)
+ * 0 on startup and gets updated on initial load or during runtime too.
+ */
+UsedOutputs usedOutputs = { outputs, 0 };
+
+/**
  * Dynamic "map" of all mappings from nodeID to outputs. Initially loaded using DAO, at runtime can be changed
  */
-Mapping mappings[MAX_MAPPING_SIZE];
-byte mappingsSize = 0;
+Mapping mappingsArray[MAX_MAPPING_SIZE];
+Mappings mappings = { mappingsArray, 0 };
+
+/*
+ * Private methods
+ */
+
+void updateUsedOutputs(byte outputNumber) {
+    // outputNumber is 1 based, so we can take directly as the size
+    if (outputNumber > usedOutputs.size) {
+        usedOutputs.size = outputNumber;
+    }
+}
 
 /*
  * API methods
  */
 
+UsedOutputs* getUsedOutputs() {
+    return &usedOutputs;
+}
+
+
 void initMapping () {
-    mappingsSize = 0;
+    mappings.size = 0;
+    usedOutputs.size = 0;
     
     // loop through all potential mappings now, skip when finding first not set
     // i.e. therefore if someone attempts to update mapping that has a gap before it (previous mapping not set), it would be ignored
@@ -75,24 +99,27 @@ void initMapping () {
             break;
         }
         
-        // higher 8 bits is nodeID, lower 8 bits is output number index starting from 1
+        // higher 8 bits is nodeID, lower 8 bits is output number starting from 1
         // just to be super sure somehow we did not get invalid outputIndex into DAO, rather check output index value read
         // since through the API method calls we have this covered (see updateMapping method below)
         // this time we do not break the loop, just continue on to the next one and set some dummy value for nodeID to make sure it is never triggered
 
         byte nodeID = (dataItem.value >> 8) & MAX_8_BITS;
-        byte outputIndex = dataItem.value & MAX_8_BITS;
-        if (outputIndex<=0 || outputIndex>OUTPUTS_COUNT) {
+        byte outputNumber = dataItem.value & MAX_8_BITS;
+        if (outputNumber<=0 || outputNumber>OUTPUTS_COUNT) {
             nodeID = UNMMAPED_NODEID; // should never be used as real mapping
-            outputIndex = OUTPUTS_COUNT; // just to make sure we have valid outputs at least in the mappings
+            outputNumber = OUTPUTS_COUNT; // just to make sure we have valid outputs at least in the mappings
+        } else {
+            // for valid mappings only, update the used outputs...
+            updateUsedOutputs(outputNumber);
         }
         
-        mappings[bucket].nodeID = nodeID;
+        mappings.array[bucket].nodeID = nodeID;
         // we always store the number in DAO from 1 to also allow CONFIG messages to use real numbers from 1 matching the silkscreen of the PCB
-        mappings[bucket].output = &outputs[outputIndex-1];
+        mappings.array[bucket].output = &outputs[outputNumber-1];
     }
 
-    mappingsSize = bucket;
+    mappings.size = bucket;
 }
 
 Output* nodeIDToOutput (byte nodeID) {
@@ -100,8 +127,8 @@ Output* nodeIDToOutput (byte nodeID) {
         return NULL;
     }
     
-    Mapping *m = mappings;
-    Mapping *mEnd = mappings + mappingsSize;
+    Mapping *m = mappings.array;
+    Mapping *mEnd = mappings.array + mappings.size;
     
     for (; m < mEnd; m++) {
         if (m->nodeID == nodeID) {
@@ -115,21 +142,21 @@ Output* nodeIDToOutput (byte nodeID) {
 void retrieveOutputStatus(byte* data) {
     byte currentBitCount = 0, currentByte = 0;
     
-    Mapping *m = mappings;
-    Mapping *mEnd = mappings + mappingsSize;
+    Output *o = usedOutputs.array;
+    Output *oEnd = usedOutputs.array + usedOutputs.size;
     
-    // first byte is always the size of real mappings
-    *data++ = mappingsSize;
+    // first byte is always the size of used outputs
+    *data++ = usedOutputs.size;
 
-    // regardless of how many switches we actually have, always set next 4 bytes...
+    // regardless of how many outputs we actually use, always set next 4 bytes...
     for (int i=0; i<5; i++) {
         data[i] = 0;
     }
     
-    for (; m < mEnd; m++) {
+    for (; o < oEnd; o++) {
         // first find out whether the respective bit in the respective port is set, 
         // then shift it to set the current bit in the current byte starting from the largest bit
-        currentByte += ( (*m->output->port >> m->output->portBit) & 1 ) << (7-currentBitCount);
+        currentByte += ( (*o->port >> o->portBit) & 1 ) << (7-currentBitCount);
         
         if (currentBitCount++ == 7) {
             // ok, now we have the full byte to set, so reset and set the output data byte
@@ -161,7 +188,10 @@ void updateMapping (byte mappingNumber, byte nodeID, byte outputNumber) {
         // store new value into DAO and update runtime mappings array
         dao_saveDataItem(&dataItem);
         
-        mappings[mappingNumber-1].nodeID = nodeID;
-        mappings[mappingNumber-1].output = &outputs[outputNumber-1];
+        mappings.array[mappingNumber-1].nodeID = nodeID;
+        mappings.array[mappingNumber-1].output = &outputs[outputNumber-1];
+        
+        // now also update runtime status of used outputs
+        updateUsedOutputs(outputNumber);
     }
 }

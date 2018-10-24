@@ -173,7 +173,10 @@ boolean initConfigData() {
     return TRUE;
 }
 
-void performOperation (Operation operation, volatile byte* port, byte shift) {
+void performOperation (Operation operation, Output *output) {    
+    volatile byte* port = output->port;
+    byte shift = 1 << output->portBit;
+
     // see http://stackoverflow.com/questions/47981/how-do-you-set-clear-and-toggle-a-single-bit-in-c-c
     switch (operation) {
         case TOGGLE:
@@ -224,22 +227,20 @@ void processIncomingOperation() {
     } else { // other operations are setting things up
         // we should only receive nodeIDs >= floor
         if (receivedNodeID > floor) {
-            // use the mapping routine to get (port, bit) to change using the received nodeID
+            // use the mapping routine to get output (port, bit) to change using the received nodeID
             // for example for nodeID 5 we need to change say PORTB, bit 2
             Output* output = nodeIDToOutput(receivedNodeID);
-            if (output) {
-                volatile byte* port = output->port;
-                byte shift = 1 << output->portBit;
-                performOperation (operation, port, shift);
+            if (output) { // we may have received unknown or not mapped nodeID, imn that case do nothing
+                performOperation (operation, output);
             }
         } else if (receivedNodeID == floor) {
-            // node ID = floor - means do the same operations as above, but for all ports
-            // TODO update to only loop through registered outputs (not whole map, just array of really used outputs)
-            performOperation (operation, &PORTA, 0b11111111);
-            performOperation (operation, &PORTB, 0b11111111);
-            performOperation (operation, &PORTC, 0b11111111);
-            performOperation (operation, &PORTD, 0b11111111);
-            performOperation (operation, &PORTE, 0b00000111); // only target real E0-E2
+            // in this case do the same operations as above, but for all really used outputs
+            UsedOutputs* outputs = getUsedOutputs();
+            Output *o = outputs->array;
+            Output *oEnd = outputs->array + outputs->size;
+            for (; o < oEnd; o++) {
+                performOperation (operation, o);                
+            }
         } // < floor should never happen, in case it does, do nothing, probably missconfigured CAN filters
         eraseReceivedOperationData();
     }
