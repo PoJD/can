@@ -288,7 +288,7 @@ void checkCan() {
         // CAN receive buffer 0 interrupt
         // now confirm the buffer 0 is full and take directly 2 bytes of data from there - should be always present
         if (RXB0CONbits.RXFUL) {
-            // we can only receive config messages, so no need to check what canID did we get
+            // we can only receive config messages, so no need to check what nodeID did we get
             // form a 16bit int from the 2 incoming bytes and let the main thread process this message then (let the interrupt finish quickly)
             receivedConfigData = (RXB0D0 << 8) + RXB0D1;
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed

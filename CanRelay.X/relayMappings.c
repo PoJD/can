@@ -54,7 +54,7 @@ Output outputs[OUTPUTS_COUNT] = {
 };
 
 /**
- * Dynamic "map" of all mappings from canID to outputs. Initially loaded using DAO, at runtime can be changed
+ * Dynamic "map" of all mappings from nodeID to outputs. Initially loaded using DAO, at runtime can be changed
  */
 Mapping mappings[MAX_MAPPING_SIZE];
 byte mappingsSize = 0;
@@ -75,19 +75,19 @@ void initMapping () {
             break;
         }
         
-        // higher 8 bits is canID, lower 8 bits is output number index starting from 1
+        // higher 8 bits is nodeID, lower 8 bits is output number index starting from 1
         // just to be super sure somehow we did not get invalid outputIndex into DAO, rather check output index value read
         // since through the API method calls we have this covered (see updateMapping method below)
-        // this time we do not break the loop, just continue on to the next one and set some dummy value for canID to make sure it is never triggered
+        // this time we do not break the loop, just continue on to the next one and set some dummy value for nodeID to make sure it is never triggered
 
-        byte canID = (dataItem.value >> 8) & MAX_8_BITS;
+        byte nodeID = (dataItem.value >> 8) & MAX_8_BITS;
         byte outputIndex = dataItem.value & MAX_8_BITS;
         if (outputIndex<=0 || outputIndex>OUTPUTS_COUNT) {
-            canID = UNMMAPED_CANID; // should never be used as real mapping
+            nodeID = UNMMAPED_NODEID; // should never be used as real mapping
             outputIndex = OUTPUTS_COUNT; // just to make sure we have valid outputs at least in the mappings
         }
         
-        mappings[bucket].canID = canID;
+        mappings[bucket].nodeID = nodeID;
         // we always store the number in DAO from 1 to also allow CONFIG messages to use real numbers from 1 matching the silkscreen of the PCB
         mappings[bucket].output = &outputs[outputIndex-1];
     }
@@ -95,8 +95,8 @@ void initMapping () {
     mappingsSize = bucket;
 }
 
-Output* canIDToOutput (byte canID) {
-    if (canID==UNMMAPED_CANID) {
+Output* nodeIDToOutput (byte nodeID) {
+    if (nodeID==UNMMAPED_NODEID) {
         return NULL;
     }
     
@@ -104,12 +104,12 @@ Output* canIDToOutput (byte canID) {
     Mapping *mEnd = mappings + mappingsSize;
     
     for (; m < mEnd; m++) {
-        if (m->canID == canID) {
+        if (m->nodeID == nodeID) {
             return m->output;
         }
     }
     
-    return NULL; // should never happen, means we got a canID we do not understand
+    return NULL; // should never happen, means we got a nodeID we do not understand
 }
 
 void retrieveOutputStatus(byte* data) {
@@ -145,23 +145,23 @@ void retrieveOutputStatus(byte* data) {
     }
 }
 
-void updateMapping (byte mappingNumber, byte canID, byte outputNumber) {
+void updateMapping (byte mappingNumber, byte nodeID, byte outputNumber) {
     // majority of checks done by the datatypes themselves, so only check the output number is in range 1.OUTPUTS_COUNT as that is real mapping size of relay
     // and also check that mapping number is in range 1 .. max number of mappings
-    // we do not care if we received UNMMAPED_CANID canID here since that could also potentially be stored already in DAO by someone, so we just need to check
-    // that in the canIDToOutput method
+    // we do not care if we received UNMMAPED_NODEID nodeID here since that could also potentially be stored already in DAO by someone, so we just need to check
+    // that in the nodeIDToOutput method
     if (outputNumber>0 && outputNumber<=OUTPUTS_COUNT && mappingNumber>0) {
         DataItem dataItem;
 
         // mappingNumber shall be a sequence of numbers 1..MAX, so use it as the bucket number to store it into using the DAO
         dataItem.bucket = mappingNumber-1 + MAPPING_START_DAO_BUCKET;
-        // value would be canID the higher 8 bits and outputNumber the lower 8 bits
-        dataItem.value = (canID << 8) + outputNumber;
+        // value would be nodeID the higher 8 bits and outputNumber the lower 8 bits
+        dataItem.value = (nodeID << 8) + outputNumber;
 
         // store new value into DAO and update runtime mappings array
         dao_saveDataItem(&dataItem);
         
-        mappings[mappingNumber-1].canID = canID;
+        mappings[mappingNumber-1].nodeID = nodeID;
         mappings[mappingNumber-1].output = &outputs[outputNumber-1];
     }
 }

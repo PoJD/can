@@ -1,5 +1,5 @@
 /* 
- * Relay mappings covers all configuration needed for the relay to properly translate from nodeIDs (canIDs) into respective output pins to get switched on in the CanRelay board.
+ * Relay mappings covers all configuration needed for the relay to properly translate from nodeIDs into respective output pins to get switched on in the CanRelay board.
  * 
  * File:   relayMappings.h
  * Author: pojd
@@ -34,7 +34,7 @@ typedef struct {
 
 
 /**
- * Mapping from canID -> output, i.e. for a given canID it would keep a reference to the output to know how to "turn it on or off"
+ * Mapping from nodeID -> output, i.e. for a given nodeID it would keep a reference to the output to know how to "turn it on or off"
  * This "map" is dynamic, stored in DAO and can be changed dynamically at runtime, e.g. by sending CAN CONFIG messages to the CanRelay.
  * 
  * It is not really a real map, merely an array, i.e. it allows dupes too
@@ -42,14 +42,14 @@ typedef struct {
  * Therefore this would be different for different floors
  */
 typedef struct {
-    byte canID; // canID to map from (as transmitted over the CAN bus line)
+    byte nodeID; // nodeID to map from (as transmitted over the CAN bus line)
     Output* output; // output reference
 } Mapping;
 
 // max size of the dynamic mappings. Use max byte size for this since. We also limit this by the CONFIG data schema, where mapping number is just 1 byte 
 #define MAX_MAPPING_SIZE 0xFF
 #define MAPPING_START_DAO_BUCKET 1 // 0 is reserved for floor, so we start from 1
-#define UNMMAPED_CANID MAX_8_BITS // unmapped can ID in the mapping to use as a marker for invalid mapping
+#define UNMMAPED_NODEID MAX_8_BITS // unmapped can ID in the mapping to use as a marker for invalid mapping
 
 /**
  * Operations
@@ -61,15 +61,15 @@ typedef struct {
 void initMapping();
 
 /**
- * For a given canID, return a reference to output (port and bit to change). Note that multiple canIDs can map to the same port and bit,
+ * For a given nodeID, return a reference to output (port and bit to change). Note that multiple nodeIDs can map to the same port and bit,
  * i.e. we can have more light switches connected to one canSwitch that end up switching on the same light even though they are physically
- * connected to different input pins on CanSwitch and thus sending different canIDs over the wire. It just gives enough flexibility
+ * connected to different input pins on CanSwitch and thus sending different nodeIDs over the wire. It just gives enough flexibility
  * routing the wires in the walls so that hopefully no need to reuse the very same ware among more wall switches.
  * 
- * @param canID the canID received on the wire
+ * @param nodeID the nodeID received on the wire
  * @return Output to use to switch on the respective output or NULL if no such mapping found
  */
-Output* canIDToOutput (byte canID);
+Output* nodeIDToOutput (byte nodeID);
 
 /**
  * Updates the in passed array of byte data with current status of output ports. First byte is always the active switches count. 
@@ -80,15 +80,15 @@ Output* canIDToOutput (byte canID);
 void retrieveOutputStatus (byte* data);
 
 /**
- * Trigger to update the respective canIDMapping. This method would make sure this update is permanent (e.g. storing it into DAO) 
+ * Trigger to update the respective nodeIDMapping. This method would make sure this update is permanent (e.g. storing it into DAO) 
  * and at the same time update any runtime structures holding the data. The caller has to make sure all previous mappings are also set,
  * otherwise this would be ignored
  * 
  * @param mappingNumber
- * @param mappingCanID
+ * @param mappingNodeID
  * @param mappingOutputNumber
  */
-void updateMapping (byte mappingNumber, byte mappingCanID, byte mappingOutputNumber);
+void updateMapping (byte mappingNumber, byte mappingNodeID, byte mappingOutputNumber);
 
 #ifdef	__cplusplus
 }

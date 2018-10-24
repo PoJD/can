@@ -39,7 +39,7 @@ volatile byte receivedDataByte = 0;
 
 /** config data - if a config CAN message was sent */
 volatile byte receivedMappingNumber = 0;
-volatile byte receivedMappingCanID = 0;
+volatile byte receivedMappingNodeID = 0;
 volatile byte receivedMappingOutputNumber = 0;
 
 /*
@@ -92,7 +92,7 @@ void configureCan() {
     can_setupFirstBitIdReceiveFilter(&header);
 
     // last piece is also config messages that canRelay now supports (only changing the mappings). It has to be a strict filter though as opposed to more vague filters above
-    // since CONFIG messages can be also targeted to the individual CanSwitches, so we need to assure the canID is equal the floor
+    // since CONFIG messages can be also targeted to the individual CanSwitches, so we need to assure the nodeID is equal the floor
     header.messageType = CONFIG;
     can_setupStrictReceiveFilter(&header);
 
@@ -120,7 +120,7 @@ void checkCanMessageReceived() {
 
             // NORMAL and COMPLEX messages are the same processing vice
             if (header.messageType == NORMAL || header.messageType == COMPLEX) {
-                // we need to know the canID (if it is equal to floor that the operation is for all lights)
+                // we need to know the nodeID (if it is equal to floor that the operation is for all lights)
                 receivedNodeID = header.nodeID;
                 // and we need just 1 byte of data then
                 receivedDataByte = RXB0D0;
@@ -128,10 +128,10 @@ void checkCanMessageReceived() {
                 // in the case of CONFIG messages, we do not need the nodeID since we know it is equal to floor as per setupCan where we use strict filter
                 // in this case we expect 3 bytes of data
                 // first byte = number of the mapping - will drive address to store this at in EEPROM
-                // second byte = canID of the mapping
+                // second byte = nodeID of the mapping
                 // last byte = output to set by this mapping (should be only up to 30 anyway)
                 receivedMappingNumber = RXB0D0;
-                receivedMappingCanID = RXB0D1;
+                receivedMappingNodeID = RXB0D1;
                 receivedMappingOutputNumber = RXB0D2;
 
             } // should never received other message types
@@ -226,7 +226,7 @@ void processIncomingOperation() {
         if (receivedNodeID > floor) {
             // use the mapping routine to get (port, bit) to change using the received nodeID
             // for example for nodeID 5 we need to change say PORTB, bit 2
-            Output* output = canIDToOutput(receivedNodeID);
+            Output* output = nodeIDToOutput(receivedNodeID);
             if (output) {
                 volatile byte* port = output->port;
                 byte shift = 1 << output->portBit;
@@ -247,7 +247,7 @@ void processIncomingOperation() {
 
 void eraseReceivedConfigData() {
     receivedMappingNumber = 0;
-    receivedMappingCanID = 0;
+    receivedMappingNodeID = 0;
     receivedMappingOutputNumber = 0;
 }
 
@@ -274,7 +274,7 @@ int main(void) {
 
         if (receivedMappingNumber) {
             // let the mapping do the magic
-            updateMapping(receivedMappingNumber, receivedMappingCanID, receivedMappingOutputNumber);
+            updateMapping(receivedMappingNumber, receivedMappingNodeID, receivedMappingOutputNumber);
             eraseReceivedConfigData();
         }        
     }
