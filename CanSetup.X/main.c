@@ -32,10 +32,10 @@ void setupCanRelay(Floor floor) {
 
 int main(void) {
     // for example setup as CanSwitch a room
-    setupCanSwitch(GARAGE_109);
+    //setupCanSwitch(GARAGE_109);
     
     // or setup as CanRelay for ground floor
-    //setupCanRelay(FIRST);
+    setupCanRelay(GROUND);
     
     Sleep();
     return 0;

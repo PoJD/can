@@ -36,6 +36,7 @@ Floor floor = GROUND; // is mandated to be set in EEPROM
 volatile byte receivedNodeID = 0;
 /** received data over CAN in the case of operations */
 volatile byte receivedDataByte = 0;
+volatile boolean receivedOperation = FALSE;
 
 /** config data - if a config CAN message was sent */
 volatile byte receivedMappingNumber = 0;
@@ -93,6 +94,7 @@ void configureCan() {
 
     // last piece is also config messages that canRelay now supports (only changing the mappings). It has to be a strict filter though as opposed to more vague filters above
     // since CONFIG messages can be also targeted to the individual CanSwitches, so we need to assure the nodeID is equal the floor
+    // this filter would be associated with another receive buffer with lower priority, so we need to remember checking that in can interrupt too
     header.messageType = CONFIG;
     can_setupStrictReceiveFilter(&header);
 
@@ -115,31 +117,39 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // now confirm the buffer 0 is full
         if (RXB0CONbits.RXFUL) {
-            // see setupCan above for more details, but we can either get NORMAL or COMPLEX or CONFIG messages
+            // see setupCan above for more details, but we can either get NORMAL or COMPLEX messages in buffer 0, but we process them the same way actually
             CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
-
-            // NORMAL and COMPLEX messages are the same processing vice
-            if (header.messageType == NORMAL || header.messageType == COMPLEX) {
-                // we need to know the nodeID (if it is equal to floor that the operation is for all lights)
-                receivedNodeID = header.nodeID;
-                // and we need just 1 byte of data then
-                receivedDataByte = RXB0D0;
-            } else if (header.messageType == CONFIG) {
-                // in the case of CONFIG messages, we do not need the nodeID since we know it is equal to floor as per setupCan where we use strict filter
-                // in this case we expect 3 bytes of data
-                // first byte = number of the mapping - will drive address to store this at in EEPROM
-                // second byte = nodeID of the mapping
-                // last byte = output to set by this mapping (should be only up to 30 anyway)
-                receivedMappingNumber = RXB0D0;
-                receivedMappingNodeID = RXB0D1;
-                receivedMappingOutputNumber = RXB0D2;
-
-            } // should never received other message types
+            // we need to know the nodeID (if it is equal to floor that the operation is for all lights)
+            receivedNodeID = header.nodeID;
+            // and we need just 1 byte of data then
+            receivedDataByte = RXB0D0;
+            // just set a flag since both of the above could actually be 0 (nodeID 0 could potentially be sent and databyte too)
+            receivedOperation = TRUE;
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
         PIR5bits.RXB0IF = 0; // clear the interrupt flag now
-    }    
+    }
+    
+    // check if CAN receive buffer 1 interrupt is enabled and interrupt flag set
+    if (PIE5bits.RXB1IE && PIR5bits.RXB1IF) {
+        // now confirm the buffer 1 is full
+        if (RXB1CONbits.RXFUL) {
+            // see setupCan above for more details, but we can only get CONFIG messages in this buffer
+            // which makes it a bit more robust since these shall be really lower priority unlike buffer 0 anyway
+            // this time we do not need to know the nodeID since we know it is equal to floor as per setupCan where we use strict filter
+            // in this case we expect 3 bytes of data
+            // first byte = number of the mapping - will drive address to store this at in EEPROM
+            // second byte = nodeID of the mapping
+            // last byte = output to set by this mapping (should be only up to 30 anyway)
+            receivedMappingNumber = RXB1D0;
+            receivedMappingNodeID = RXB1D1;
+            receivedMappingOutputNumber = RXB1D2;
+
+            RXB1CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
+        }
+        PIR5bits.RXB1IF = 0; // clear the interrupt flag now
+    }
 }
 
 /**
@@ -215,6 +225,7 @@ void sendCanMessageWithAllPorts() {
 void eraseReceivedOperationData() {
     receivedNodeID = 0;
     receivedDataByte = 0;
+    receivedOperation = FALSE;
 }
 
 void processIncomingOperation() {
@@ -268,8 +279,8 @@ int main(void) {
     
     // main loop
     while (TRUE) {
-        // received a message over CAN, so react to that - databyte is never null, if it is, we would just ignore it anyway
-        if (receivedDataByte) {
+        // received a message over CAN, so react to that - use the flag to detect am operation was received
+        if (receivedOperation) {
             processIncomingOperation();
         }
 
