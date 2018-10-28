@@ -177,7 +177,9 @@ void updateMapping (byte mappingNumber, byte nodeID, byte outputNumber) {
     // and also check that mapping number is in range 1 .. max number of mappings
     // we do not care if we received UNMMAPED_NODEID nodeID here since that could also potentially be stored already in DAO by someone, so we just need to check
     // that in the nodeIDToOutput method
-    if (outputNumber>0 && outputNumber<=OUTPUTS_COUNT && mappingNumber>0) {
+    
+    // also allow MAX_8_BITS outputnumber and nodeID that would effectively "erase" that mapping in DAO (use the same as default values)
+    if (mappingNumber>0 && ( (outputNumber>0 && outputNumber<=OUTPUTS_COUNT) || (outputNumber==MAX_8_BITS && nodeID == MAX_8_BITS) )) {
         DataItem dataItem;
 
         // mappingNumber shall be a sequence of numbers 1..MAX, so use it as the bucket number to store it into using the DAO

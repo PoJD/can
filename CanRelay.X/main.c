@@ -8,6 +8,8 @@
  */
 
 #include <xc.h>
+#include <pic18f45k80.h>
+#include <pic18f25k80.h>
 #include "config.h"
 #include "utils.h"
 #include "can.h"
@@ -17,7 +19,7 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
-#define FIRMWARE_VERSION 2 // for 44pin packages, first version
+#define FIRMWARE_VERSION 3
 
 /** bucket of the floor of this node in DAO */
 #define FLOOR_DAO_BUCKET 0
@@ -117,14 +119,16 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB0IE && PIR5bits.RXB0IF) {
         // now confirm the buffer 0 is full
         if (RXB0CONbits.RXFUL) {
-            // see setupCan above for more details, but we can either get NORMAL or COMPLEX messages in buffer 0, but we process them the same way actually
-            CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
-            // we need to know the nodeID (if it is equal to floor that the operation is for all lights)
-            receivedNodeID = header.nodeID;
-            // and we need just 1 byte of data then
-            receivedDataByte = RXB0D0;
-            // just set a flag since both of the above could actually be 0 (nodeID 0 could potentially be sent and databyte too)
-            receivedOperation = TRUE;
+            if (RXB0DLCbits.DLC >= 1) { // make sure we received at least one byte in the CAN data frame
+                // see setupCan above for more details, but we can either get NORMAL or COMPLEX messages in buffer 0, but we process them the same way actually
+                CanHeader header = can_idToHeader(&RXB0SIDH, &RXB0SIDL);
+                // we need to know the nodeID (if it is equal to floor that the operation is for all lights)
+                receivedNodeID = header.nodeID;
+                // and we need just 1 byte of data then
+                receivedDataByte = RXB0D0;
+                // just set a flag since both of the above could actually be 0 (nodeID 0 could potentially be sent and databyte too)
+                receivedOperation = TRUE;
+            }
             
             RXB0CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
@@ -135,16 +139,18 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB1IE && PIR5bits.RXB1IF) {
         // now confirm the buffer 1 is full
         if (RXB1CONbits.RXFUL) {
-            // see setupCan above for more details, but we can only get CONFIG messages in this buffer
-            // which makes it a bit more robust since these shall be really lower priority unlike buffer 0 anyway
-            // this time we do not need to know the nodeID since we know it is equal to floor as per setupCan where we use strict filter
-            // in this case we expect 3 bytes of data
-            // first byte = number of the mapping - will drive address to store this at in EEPROM
-            // second byte = nodeID of the mapping
-            // last byte = output to set by this mapping (should be only up to 30 anyway)
-            receivedMappingNumber = RXB1D0;
-            receivedMappingNodeID = RXB1D1;
-            receivedMappingOutputNumber = RXB1D2;
+            if (RXB1DLCbits.DLC == 3) { // make sure we received exactly 3 bytes in the CAN data frame
+                // see setupCan above for more details, but we can only get CONFIG messages in this buffer
+                // which makes it a bit more robust since these shall be really lower priority unlike buffer 0 anyway
+                // this time we do not need to know the nodeID since we know it is equal to floor as per setupCan where we use strict filter
+                // in this case we expect 3 bytes of data
+                // first byte = number of the mapping - will drive address to store this at in EEPROM
+                // second byte = nodeID of the mapping
+                // last byte = output to set by this mapping (should be only up to 30 anyway)
+                receivedMappingNumber = RXB1D0;
+                receivedMappingNodeID = RXB1D1;
+                receivedMappingOutputNumber = RXB1D2;                
+            }
 
             RXB1CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
         }
@@ -153,8 +159,7 @@ void checkCanMessageReceived() {
 }
 
 /**
- * Fired when an interrupt occurs. Internally checks for the port b interrupt being enabled and the flag being set and then processes it accordingly
- * Or sends a heartbeat message if the timer occurred otherwise
+ * Fired when an interrupt occurs.
  */
 void interrupt handleInterrupt(void) {
     checkCanMessageReceived();
@@ -169,7 +174,7 @@ void interrupt handleInterrupt(void) {
  * @return TRUE if all mandatory values were read OK, false otherwise
  */
 boolean initConfigData() {
-    // floor is mandatory. If it is not set, then return false (but sleep first)
+    // floor is mandatory. If it is not set, then put the device to sleep
     DataItem dataItem = dao_loadDataItem(FLOOR_DAO_BUCKET);
     if (!dao_isValid(&dataItem)) {
         Sleep();

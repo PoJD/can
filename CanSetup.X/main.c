@@ -35,7 +35,7 @@ int main(void) {
     //setupCanSwitch(GARAGE_109);
     
     // or setup as CanRelay for ground floor
-    setupCanRelay(GROUND);
+    setupCanRelay(FIRST);
     
     Sleep();
     return 0;

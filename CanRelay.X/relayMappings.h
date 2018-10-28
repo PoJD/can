@@ -64,7 +64,7 @@ typedef struct {
 
 
 // max size of the dynamic mappings. Use max byte size for this since. We also limit this by the CONFIG data schema, where mapping number is just 1 byte 
-#define MAX_MAPPING_SIZE 0xFF
+#define MAX_MAPPING_SIZE MAX_8_BITS
 #define MAPPING_START_DAO_BUCKET 1 // 0 is reserved for floor, so we start from 1
 #define UNMMAPED_NODEID MAX_8_BITS // unmapped can ID in the mapping to use as a marker for invalid mapping
 
