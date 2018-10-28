@@ -25,7 +25,7 @@ Key features:
 * The data contains just one byte by default that consists of 2bits operation (0b00 = TOGGLE), 1 bit for any CAN registry ERROR, 2 bits for firmware and last 3 bits for switch counter (in non DEBUG mode the only way to see roughly if the wall switch is not bouncing itself after each switch)
 * Typical values in HEX now sent for the CanSwitches (firmware version 0, no errors and toggle) shall be in range 0-7 - just the switch counter in there. For anything larger, a CAN error or new firmware version
 * The switch now supports wiring up to 8 real wall switches to minimize the need to have PCB in each wall switch. This switch can then send CAN message for any of the 8 B port input changes to logical zero. The switch then sends CAN ID of nodeID + PORTB pin number, e.g. nodeID directly for change on B0, nodeID+1 for change on B1, etc
-* As long as the wall switch count does not exceed 8, each can be tight up to individual input pin even if it 2 or more physical light switches should be switching on 1 output pin on CanRelay. Just the respective mapping has to be set properly in https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c (see mapping of ports section in CanRelay)
+* As long as the wall switch count does not exceed 8, each can be tight up to individual input pin even if it 2 or more physical light switches should be switching on 1 output pin on CanRelay. Just the respective mapping has to be set properly. See mapping of ports section in CanRelay.X
 * DEBUG mode
     * Disabled by default and needs to be enabled in firmware (defined constant in firmware file)
     * non DEBUG mode (default) heavily utilizes power savings, putting the chip to sleep using low current drawning specs to minimize power consumption, disabling the crystal, whole chip and even the transceiver, only waken up by input interrupt. Current drawn in sleep measured as low as 1.8uA. The current drawn in non DEBUG mode is about 18mA instead.
@@ -53,10 +53,14 @@ Key features:
 
 * Registers for all NORMAL and COMPLEX messages for a given floor (the floor has to be setup in EEPROM first)
 * For a given message, it would take the canID and translate it using relayMappings.h to actual port and bit to change (to assure labels on the relay do match lines in the relayMappings file)
+* As of firmware version 3, CanRelay also supports receiving CONFIG messages (nodeID has to match the floor this time exactly), then it assumes exactly 3 bytes of data and uses these to set new mapping from CAN ID to output number
 
 #### Mapping of ports
-* See https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c for details
-* Each line in the respective array there represents 1 label on the relay starting from label 1
+* See https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c for details (mappings outputs to ports and bits to change
+* CanRelay keeps internally all mappings from output numbers as visible on the silkscreen (1..30) to output PORTs and bits to change and in addition to that allows a dynamic "map" from nodeID to a given output. Multiple outputs can be configured to mapped to the same nodeID, e.g. being able to set multiple switches to switch on the same light
+* CanRelay stores the dynamic mappings in EEPROM, starting from bucket 1 (byte 2)
+* The received messages should have 3 bytes: mapping number, nodeID, output number. Mapping number should be in range 1..0xFF and marks the position in DAO to store this mapping into. Mind that the firmware does not check whether all previous mappings were set, if not, this new would get effectively ignored on next startup. nodeID shall be any 8 bit value representing the nodeID as transmitted over CAN. Output number shall be any number in range 1..30 and marks the respective output label on the silkscreen
+
 
 ## Communication Protocol
 Custom communication protocol was established, inspired partially in VSCP
@@ -81,11 +85,14 @@ CAN Data
     * byte 6 and 7: CAN bus error counts. TXERRCNT (transmit error count) and RXERRCNT (receive error count)
     * byte 8: firmware version
 * CONFIG (2)
-    * allows canSwitches to be configured remotely over CAN bus, so only the respective CAN node would process this message
-    * 2 bytes of data CAN sent in this case
-    * highest 2 bits = datatype ( https://github.com/PoJD/piclib/blob/master/dao.h ), remaining 14 bits = value of this datatype
-    * The respective node stores these new values into EEPROM and updates the runtime variables to act accordingly (allows changing nodeID, heartbeat timeout and suppressing the switch functionality for CanSwitch.
-    * Means this is only supported in DEBUG mode for CanSwitches
+    * For CanSwitch
+        * allows canSwitches to be configured remotely over CAN bus, so only the respective CAN node would process this message
+        * 2 bytes of data CAN sent in this case
+        * highest 2 bits = datatype ( https://github.com/PoJD/piclib/blob/master/dao.h ), remaining 14 bits = value of this datatype
+        * The respective node stores these new values into EEPROM and updates the runtime variables to act accordingly (allows changing nodeID, heartbeat timeout and suppressing the switch functionality for CanSwitch.
+        * Means this is only supported in DEBUG mode for CanSwitches
+    * For CanRelay
+        * allows relay mappings to be dynamically set, see above Mapping of ports section
 * HEARTBEAT (1)
     * Only sent by the CanSwitches
     * Similar as NORMAL. In addition to the 1 byte sent in NORMAL message, this also sets 4 more bytes in CAN data as per the above
@@ -100,6 +107,7 @@ See below examples as they can be used with the cansend utility (http://elinux.o
 * 011#10    - toggles the switch on node 11 (here the number in the data can be any number as long as first 2 bits are 0, i.e. anything from 0 to 3F. Ranges would then tell more about the actual sending chip as per the encoding of the data byte. See https://github.com/PoJD/piclib/blob/master/can.h method can_combineCanDataByte. E.g. for firmware version 1 and no errors the CanSwitch would actually send data byte between 08 and 0F
 * 000#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 0 (using NORMAL message)
 * 080#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 1
+* 200#03.04.02 - changes/sets mapping 3 in floor 0 to map nodeID 4 to output 2. All mappings up to 3 (e.g. 1 and 2) has to be set in order for this to be effective 
 
 #### Complex message types below
 * 311#00 - toggles the switch of the node 11 (any number between 0 and 3F for data)
