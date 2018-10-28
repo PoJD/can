@@ -29,7 +29,7 @@ Key features:
 * DEBUG mode
     * Disabled by default and needs to be enabled in firmware (defined constant in firmware file)
     * non DEBUG mode (default) heavily utilizes power savings, putting the chip to sleep using low current drawning specs to minimize power consumption, disabling the crystal, whole chip and even the transceiver, only waken up by input interrupt. Current drawn in sleep measured as low as 1.8uA. The current drawn in non DEBUG mode is about 18mA instead.
-* Etra features in DEBUG mode
+* Extra features in DEBUG mode
     * supports CONFIG messages being sent to the node to update nodeID or heartbeat timeout or a flag to suppress the switch (it needs to be up in order to receive any CAN traffic, thus this only works in DEBUG mode)
     * timer using the external crystal (crystal by default used only to get clocks for sending the CAN message)
     * Thanks to timer the logic can actually measure the time and as a result the following new features are added
@@ -53,14 +53,14 @@ Key features:
 
 * Registers for all NORMAL and COMPLEX messages for a given floor (the floor has to be setup in EEPROM first)
 * For a given message, it would take the canID and translate it using relayMappings.h to actual port and bit to change (to assure labels on the relay do match lines in the relayMappings file)
-* As of firmware version 3, CanRelay also supports receiving CONFIG messages (nodeID has to match the floor this time exactly), then it assumes exactly 3 bytes of data and uses these to set new mapping from CAN ID to output number
+* As of firmware version 3, CanRelay also supports receiving CONFIG messages (nodeID has to match the floor this time exactly), then it assumes exactly 3 bytes of data and uses these to set new mapping from nodeID to output number
 
 #### Mapping of ports
 * See https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c for details (mappings outputs to ports and bits to change
-* CanRelay keeps internally all mappings from output numbers as visible on the silkscreen (1..30) to output PORTs and bits to change and in addition to that allows a dynamic "map" from nodeID to a given output. Multiple outputs can be configured to mapped to the same nodeID, e.g. being able to set multiple switches to switch on the same light
+* CanRelay keeps internally all mappings from output numbers as visible on the silkscreen (1..30) to output PORTs and bits to change and in addition to that allows a dynamic "map" from nodeID to a given output. Multiple outputs can be configured to be mapped to the same nodeID, e.g. being able to set multiple switches to switch on the same light
 * CanRelay stores the dynamic mappings in EEPROM, starting from bucket 1 (byte 2)
-* The received messages should have 3 bytes: mapping number, nodeID, output number. Mapping number should be in range 1..0xFF and marks the position in DAO to store this mapping into. Mind that the firmware does not check whether all previous mappings were set, if not, this new would get effectively ignored on next startup. nodeID shall be any 8 bit value representing the nodeID as transmitted over CAN. Output number shall be any number in range 1..30 and marks the respective output label on the silkscreen
-
+* The received messages should have 3 bytes: mapping number, nodeID, output number. Mapping number should be in range 1..0xFF and marks the position in DAO to store this mapping into. Mind that the firmware does not check whether all previous mappings were set, if not, this new would get effectively ignored on next startup since all mappings are assumed to be present in EEPROM in sequence from bucket 1. nodeID shall be any 8 bit value representing the nodeID as transmitted over CAN. Output number shall be any number in range 1..30 and marks the respective output label on the silkscreen
+* File canRelayMappings.sh contains all mappings for both floors that are now used
 
 ## Communication Protocol
 Custom communication protocol was established, inspired partially in VSCP
@@ -69,7 +69,7 @@ CAN ID
 * Extended CAN identifiers not used, so only 11 bits used for standard CAN ID
 * First 3 bits are reserved for message type: https://github.com/PoJD/piclib/blob/master/can.h
 * Remaining 8 bits are reserved for internal nodeID: https://github.com/PoJD/can/blob/master/CanSetup.X/canSwitches.h
-* Node id 1st bit is always the floor, so effectively 7 bits remaining for each floor (which should be sufficient). https://github.com/PoJD/can/blob/master/CanSetup.X/canSwitches.h lists all CAN IDs for all switches. Each has 8 IDs reserved since in theory we can wire up to 8 individual wall switches to one CanSwitch
+* Node id 1st bit is always the floor, so effectively 7 bits remaining for each floor (which should be sufficient). https://github.com/PoJD/can/blob/master/CanSetup.X/canSwitches.h lists all nodeIDs for all switches. Each has 8 IDs reserved since in theory we can wire up to 8 individual wall switches to one CanSwitch
 
 CAN Data
 * NORMAL (0) and COMPLEX (3) message types (aka action message types)

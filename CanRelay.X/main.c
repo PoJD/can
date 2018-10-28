@@ -8,7 +8,6 @@
  */
 
 #include <xc.h>
-#include <pic18f45k80.h>
 #include "config.h"
 #include "utils.h"
 #include "can.h"
