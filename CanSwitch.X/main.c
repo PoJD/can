@@ -64,7 +64,7 @@ volatile unsigned long tQuarterSecSinceStart = 0;
 volatile unsigned long tSecsSinceHeartbeat = 0;
 
 /** config data - if a config CAN message was sent */
-volatile int receivedConfigData = 0;
+volatile unsigned int receivedConfigData = 0;
 
 
 /*
