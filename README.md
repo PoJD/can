@@ -54,12 +54,13 @@ Key features:
 * Registers for all NORMAL and COMPLEX messages for a given floor (the floor has to be setup in EEPROM first)
 * For a given message, it would take the canID and translate it using relayMappings.h to actual port and bit to change (to assure labels on the relay do match lines in the relayMappings file)
 * As of firmware version 3, CanRelay also supports receiving CONFIG messages (nodeID has to match the floor this time exactly), then it assumes exactly 3 bytes of data and uses these to set new mapping from nodeID to output number
+* As of firmware version 3, CanRelay also understands MAPPING message types and would reply with runtime mappings set for this floor. See more details below
 
 #### Mapping of ports
 * See https://github.com/PoJD/can/blob/master/CanRelay.X/relayMappings.c for details (mappings outputs to ports and bits to change
 * CanRelay keeps internally all mappings from output numbers as visible on the silkscreen (1..30) to output PORTs and bits to change and in addition to that allows a dynamic "map" from nodeID to a given output. Multiple outputs can be configured to be mapped to the same nodeID, e.g. being able to set multiple switches to switch on the same light
 * CanRelay stores the dynamic mappings in EEPROM, starting from bucket 1 (byte 2)
-* The received messages should have 3 bytes: mapping number, nodeID, output number. Mapping number should be in range 1..0xFF and marks the position in DAO to store this mapping into. Mind that the firmware does not check whether all previous mappings were set, if not, this new would get effectively ignored on next startup since all mappings are assumed to be present in EEPROM in sequence from bucket 1. nodeID shall be any 8 bit value representing the nodeID as transmitted over CAN. Output number shall be any number in range 1..30 and marks the respective output label on the silkscreen
+* The received CONFIG messages should have 3 bytes: mapping number, nodeID, output number. Mapping number should be in range 1..0xFF and marks the position in DAO to store this mapping into. Mind that the firmware does not check whether all previous mappings were set, if not, this new would get effectively ignored on next startup since all mappings are assumed to be present in EEPROM in sequence from bucket 1. nodeID shall be any 8 bit value representing the nodeID as transmitted over CAN. Output number shall be any number in range 1..30 and marks the respective output label on the silkscreen
 * File canRelayMappings.sh contains all mappings for both floors that are now used
 
 ## Communication Protocol
@@ -97,6 +98,11 @@ CAN Data
     * Only sent by the CanSwitches
     * Similar as NORMAL. In addition to the 1 byte sent in NORMAL message, this also sets 4 more bytes in CAN data as per the above
     * Also sent only in DEBUG mode
+* MAPPING (5) and MAPPING_REPLY (6)
+    * Only CanRelay would reply to this traffic. For this message type and nodeID = floor, regardless the data frame, the respective CanRelay would send over all relayMappings it currently uses at runtime to translate from nodeIDs to outputs. The CAN ID would be = MAPPING_REPLY + floor nodeID
+    * If more than 8 mappings are used, it would split the mappings into multiple CAN messages
+    * no counter sent or total size, just all mappings over
+    * Is meant to be used in target application only for testing purpose to confirm mappings set and used in CanRelay since this would occupy the chip for quite some time and could lead to dropped operation traffic (no buffer overflow in there and if it would to be sending say 32 messages, that would add up to quite some amount of time already, so do not use this message in PROD!
 
 ### Examples
 See below examples as they can be used with the cansend utility (http://elinux.org/Can-utils). So you can invoke e.g. cansend can0 XXX, where XXX is in the below table
@@ -117,6 +123,11 @@ See below examples as they can be used with the cansend utility (http://elinux.o
  * for example: 400#1E.00.00.00.00.00.00.01 (see COMPLEX REPLY above. Here we have 1E outputs = 30, all have value 0 = off, CAN errors are 0 and FIRMWARE version is 1. Can ID has no impact here other than the range - see above (e.g. 300 to 37F is for floor 0, for larger can IDs the 1st floor CanRelay would reply instead - i.e. for 380 to 3FF). The reply would include the floor too in canID, e.g. 400 for ground floor and 480 for first floor
 * 300#40 - switches on all lights on floor 0
 * 380#80 - switches off all lights on floor 1
+
+#### Mappings
+* 500#00 - get all runtime mappings of floor 0
+    * A reply could look like: 600#01.01.02.02.03.02.05.03 - so just 4 mappings for this floor, mapping nodeID 1 to output 1, nodeID 2 to output 2, nodeID 3 to output 2 and nodeID 5 to output 3
+
 
 ## Setting up CAN on Odroid
 ### Autoload module on odroid

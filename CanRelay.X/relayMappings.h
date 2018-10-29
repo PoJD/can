@@ -42,7 +42,7 @@ typedef struct {
 
 
 /**
- * Mapping from nodeID -> output, i.e. for a given nodeID it would keep a reference to the output to know how to "turn it on or off"
+ * Mapping from nodeID -> output, i.e. for a given nodeID it would keep a number of the output to know how to "turn it on or off"
  * This "map" is dynamic, stored in DAO and can be changed dynamically at runtime, e.g. by sending CAN CONFIG messages to the CanRelay.
  * 
  * It is not really a real map, merely an array, i.e. it allows dupes too
@@ -51,7 +51,7 @@ typedef struct {
  */
 typedef struct {
     byte nodeID; // nodeID to map from (as transmitted over the CAN bus line)
-    Output* output; // output reference
+    byte outputNumber; // output number (indexed from 1 to match silkscreen labels)
 } Mapping;
 
 /**
@@ -101,6 +101,13 @@ void retrieveOutputStatus (byte* data);
  * @return reference to the used outputs (only registered outputs in there)
  */
 UsedOutputs* getUsedOutputs();
+
+/**
+ * Gets the mappings used at runtime by this CanRelay
+ * 
+ * @return reference to the internal dynamic "map" from nodeID to outputs
+ */
+Mappings* getRuntimeMappings();
 
 /**
  * Trigger to update the respective nodeIDMapping. This method would make sure this update is permanent (e.g. storing it into DAO) 

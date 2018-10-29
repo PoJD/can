@@ -79,7 +79,7 @@ void updateUsedOutputs(byte outputNumber) {
 
 void updateMappingCache(byte mappingNumber, byte nodeID, byte outputNumber) {
     mappings.array[mappingNumber-1].nodeID = nodeID;
-    mappings.array[mappingNumber-1].output = &outputs[outputNumber-1];
+    mappings.array[mappingNumber-1].outputNumber = outputNumber;
 
     if (mappingNumber > mappings.size) {
         mappings.size = mappingNumber;
@@ -94,6 +94,9 @@ UsedOutputs* getUsedOutputs() {
     return &usedOutputs;
 }
 
+Mappings* getRuntimeMappings() {
+    return &mappings;
+}
 
 void initMapping () {
     mappings.size = 0;
@@ -137,7 +140,7 @@ Output* nodeIDToOutput (byte nodeID) {
     
     for (; m < mEnd; m++) {
         if (m->nodeID == nodeID) {
-            return m->output;
+            return &outputs[m->outputNumber-1];
         }
     }
     

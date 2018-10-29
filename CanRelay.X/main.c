@@ -43,6 +43,9 @@ volatile byte receivedMappingNumber = 0;
 volatile byte receivedMappingNodeID = 0;
 volatile byte receivedMappingOutputNumber = 0;
 
+/** request for mappings received? */
+volatile boolean receivedMappingsRequest = FALSE;
+
 /*
  * Setup section
  */
@@ -98,6 +101,10 @@ void configureCan() {
     header.messageType = CONFIG;
     can_setupStrictReceiveFilter(&header);
 
+    // now also register to listen to MAPPINGS requests, also strict filters
+    header.messageType = MAPPINGS;
+    can_setupStrictReceiveFilter(&header);
+
     // switch CAN to normal mode
     can_setMode(NORMAL_MODE);
 }
@@ -137,17 +144,20 @@ void checkCanMessageReceived() {
     if (PIE5bits.RXB1IE && PIR5bits.RXB1IF) {
         // now confirm the buffer 1 is full
         if (RXB1CONbits.RXFUL) {
-            if (RXB1DLCbits.DLC == 3) { // make sure we received exactly 3 bytes in the CAN data frame
-                // see setupCan above for more details, but we can only get CONFIG messages in this buffer
-                // which makes it a bit more robust since these shall be really lower priority unlike buffer 0 anyway
-                // this time we do not need to know the nodeID since we know it is equal to floor as per setupCan where we use strict filter
+            // see setupCan above for more details, but we can only get CONFIG or MAPPINGS messages in this buffer
+            // which makes it a bit more robust since these shall be really lower priority unlike buffer 0 anyway
+            // this time we do not need to know the nodeID since we know it is equal to floor as per setupCan where we use strict filter
+            CanHeader header = can_idToHeader(&RXB1SIDH, &RXB1SIDL);
+            if (CONFIG == header.messageType && RXB1DLCbits.DLC == 3) {
                 // in this case we expect 3 bytes of data
                 // first byte = number of the mapping - will drive address to store this at in EEPROM
                 // second byte = nodeID of the mapping
                 // last byte = output to set by this mapping (should be only up to 30 anyway)
                 receivedMappingNumber = RXB1D0;
                 receivedMappingNodeID = RXB1D1;
-                receivedMappingOutputNumber = RXB1D2;                
+                receivedMappingOutputNumber = RXB1D2;
+            } else if (MAPPINGS == header.messageType) { // in this case we do not care about data frame length
+                receivedMappingsRequest = TRUE;
             }
 
             RXB1CONbits.RXFUL = 0; // mark the data in buffer as read and no longer needed
@@ -266,6 +276,44 @@ void eraseReceivedConfigData() {
     receivedMappingOutputNumber = 0;
 }
 
+void sendOneCanMessageWithMappings(CanMessage* message, byte dataLength) {
+    message->dataLength = dataLength;
+    can_sendSynchronous(message);
+}
+
+void sendCanMessagesWithAllMappings() {
+    CanHeader header;
+    header.nodeID = floor;
+    header.messageType = MAPPINGS_REPLY;
+    
+    CanMessage message;
+    message.header = &header;
+    byte* data = &message.data;
+    
+    // now loop through all the mappings, split it to chunks of 8 bytes top per messages and send all the messages with mappings, no size now
+    Mappings* mappings = getRuntimeMappings();
+    Mapping *m = mappings->array;
+    Mapping *mEnd = mappings->array + mappings->size;
+    
+    byte dataLength = 0;
+    for (; m < mEnd; m++) {
+        *data++ = m->nodeID;
+        *data++ = m->outputNumber;
+        dataLength += 2;
+        if (dataLength == 8) {
+            // we have enough data to send can message, so send it now and reset data pointer to start from data 0 again
+            sendOneCanMessageWithMappings(&message, dataLength);
+            dataLength = 0;
+            data = &message.data;
+        }
+    }
+    
+    if (dataLength > 0) {
+        // we already put some packets in data, so send what we have now
+        sendOneCanMessageWithMappings(&message, dataLength);
+    }
+}
+
 
 /**
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
@@ -291,7 +339,12 @@ int main(void) {
             // let the mapping do the magic
             updateMapping(receivedMappingNumber, receivedMappingNodeID, receivedMappingOutputNumber);
             eraseReceivedConfigData();
-        }        
+        }
+        
+        if (receivedMappingsRequest) {
+            receivedMappingsRequest = FALSE;
+            sendCanMessagesWithAllMappings();
+        }
     }
     
     return 0;
