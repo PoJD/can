@@ -77,6 +77,15 @@ void updateUsedOutputs(byte outputNumber) {
     }
 }
 
+void updateMappingCache(byte mappingNumber, byte nodeID, byte outputNumber) {
+    mappings.array[mappingNumber-1].nodeID = nodeID;
+    mappings.array[mappingNumber-1].output = &outputs[outputNumber-1];
+
+    if (mappingNumber > mappings.size) {
+        mappings.size = mappingNumber;
+    }
+}
+
 /*
  * API methods
  */
@@ -92,9 +101,9 @@ void initMapping () {
     
     // loop through all potential mappings now, skip when finding first not set
     // i.e. therefore if someone attempts to update mapping that has a gap before it (previous mapping not set), it would be ignored
-    int bucket = 0;
-    for (; bucket < MAX_MAPPING_SIZE; bucket++) {
-        DataItem dataItem = dao_loadDataItem(bucket+MAPPING_START_DAO_BUCKET);
+    int bucket = 1;
+    for (; bucket <= MAX_MAPPING_SIZE; bucket++) {
+        DataItem dataItem = dao_loadDataItem(bucket-1 + MAPPING_START_DAO_BUCKET);
         if (!dao_isValid(&dataItem)) {
             break;
         }
@@ -113,13 +122,9 @@ void initMapping () {
             // for valid mappings only, update the used outputs...
             updateUsedOutputs(outputNumber);
         }
-        
-        mappings.array[bucket].nodeID = nodeID;
         // we always store the number in DAO from 1 to also allow CONFIG messages to use real numbers from 1 matching the silkscreen of the PCB
-        mappings.array[bucket].output = &outputs[outputNumber-1];
+        updateMappingCache(bucket, nodeID, outputNumber);
     }
-
-    mappings.size = bucket;
 }
 
 Output* nodeIDToOutput (byte nodeID) {
@@ -187,13 +192,13 @@ void updateMapping (byte mappingNumber, byte nodeID, byte outputNumber) {
         // value would be nodeID the higher 8 bits and outputNumber the lower 8 bits
         dataItem.value = (nodeID << 8) + outputNumber;
 
-        // store new value into DAO and update runtime mappings array
+        // store new value into DAO 
         dao_saveDataItem(&dataItem);
-        
-        mappings.array[mappingNumber-1].nodeID = nodeID;
-        mappings.array[mappingNumber-1].output = &outputs[outputNumber-1];
-        
-        // now also update runtime status of used outputs
+    }
+    
+    if (outputNumber>0 && outputNumber<=OUTPUTS_COUNT) {
+        // now also update runtime status of used outputs and mappings
+        updateMappingCache(mappingNumber, nodeID, outputNumber);
         updateUsedOutputs(outputNumber);
     }
 }
