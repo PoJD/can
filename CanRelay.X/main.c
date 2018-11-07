@@ -46,6 +46,11 @@ volatile byte receivedMappingOutputNumber = 0;
 /** request for mappings received? */
 volatile boolean receivedMappingsRequest = FALSE;
 
+/**
+ * Timer data
+ */
+volatile unsigned long tQuarterSecSinceStart = 0;
+
 /*
  * Setup section
  */
@@ -109,10 +114,21 @@ void configureCan() {
     can_setMode(NORMAL_MODE);
 }
 
+
+void configureTimer() {
+    // enable timer, internal clock, use prescaler 1:16 (last 3 bits below)
+    // so we have 2^16 * 16 = 1mil oscillator cycles. Since 4 oscillator cycles made up 1 instruction cycle,
+    // we have 4mil oscillator cycles each second, so we should see an interrupt 4 times a second
+    T0CON = 0b10000011;
+    // enable timer interrupts
+    INTCONbits.TMR0IE = 1;
+}
+
 void configure() {
     configureSpeed();    
     configureOutputs();
     configureCan();
+    configureTimer();
 }
 
 /*
@@ -167,9 +183,22 @@ void checkCanMessageReceived() {
 }
 
 /**
+ * Timer processing
+ */
+
+void checkTimerExpired() {
+    // check if timer 0 interrupt is enabled and interrupt flag set, if so, just increase the counter of quarters of second
+    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {
+        tQuarterSecSinceStart++;
+        INTCONbits.TMR0IF = 0; // clear the interrupt
+    }
+}
+
+/**
  * Fired when an interrupt occurs.
  */
 void interrupt handleInterrupt(void) {
+    checkTimerExpired();
     checkCanMessageReceived();
 }
 
@@ -253,12 +282,16 @@ void processIncomingOperation() {
         if (receivedNodeID > floor) {
             // use the mapping routine to get output (port, bit) to change using the received nodeID
             // for example for nodeID 5 we need to change say PORTB, bit 2
-            Output* output = nodeIDToOutput(receivedNodeID);
-            if (output) { // we may have received unknown or not mapped nodeID, imn that case do nothing
+            // pass in also the current time since the method internally also checks for too fast operations for a given output
+            Output* output = nodeIDToOutput(receivedNodeID, tQuarterSecSinceStart);
+            // we may have received unknown or not mapped nodeID, in that case do nothing
+            // or it may be too soon after last message for this output
+            if (output) { 
                 performOperation (operation, output);
             }
         } else if (receivedNodeID == floor) {
             // in this case do the same operations as above, but for all really used outputs
+            // in this case the internal time for the outputs is not used, so this operation can be invoked very fast via CAN API
             UsedOutputs* outputs = getUsedOutputs();
             Output *o = outputs->array;
             Output *oEnd = outputs->array + outputs->size;

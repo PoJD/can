@@ -84,9 +84,12 @@ void initMapping();
  * routing the wires in the walls so that hopefully no need to reuse the very same ware among more wall switches.
  * 
  * @param nodeID the nodeID received on the wire
- * @return Output to use to switch on the respective output or NULL if no such mapping found
+ * @param time actual time in quarters per second as measured by the caller. This method internally checks whether the internally stored time
+ * of last access to the found output (if found) is smaller than the parameter, i.e. effectively checking if at least 250ms already passed. The actual
+ * time passed depends on the actual time this method is invoked, but should be in range 250-500ms as a result.
+ * @return Output to use to switch on the respective output or NULL if no such mapping found or this method was called too soon after last invocation for the underlying output
  */
-Output* nodeIDToOutput (byte nodeID);
+Output* nodeIDToOutput (byte nodeID, unsigned long time);
 
 /**
  * Updates the in passed array of byte data with current status of output ports. First byte is always the active switches count. 
@@ -97,7 +100,11 @@ Output* nodeIDToOutput (byte nodeID);
 void retrieveOutputStatus (byte* data);
 
 /**
- * Get UsedOutputs structure so that the caller can iterate through all of them and perform actions against them
+ * Get UsedOutputs structure so that the caller can iterate through all of them and perform actions against them.
+ * Mind that this call returns all outputs irrespective when they were last access. So unlike nodeIDToOutput method, 
+ * this method provides no protection from sporadic or very fast calls of operations on the outputs, so the caller
+ * needs to assure this is not invoked far too often to cause some fast blinks in the outputs
+ * 
  * @return reference to the used outputs (only registered outputs in there)
  */
 UsedOutputs* getUsedOutputs();

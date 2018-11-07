@@ -66,15 +66,40 @@ UsedOutputs usedOutputs = { outputs, 0 };
 Mapping mappingsArray[MAX_MAPPING_SIZE];
 Mappings mappings = { mappingsArray, 0 };
 
+/** 
+ * Simple array where each index is reserved for output and value is the last time a non-GET operation was invoked for that output.
+ * This way we implement sort of a switch debouncer inside CanRelay and protect against sporadic CAN messages from CanSwitches.
+ * It is more generic - i.e. any operation other than GET for a given output is always tracked. So even if someone tries to click very 
+ * quickly perhaps via Apple HomeKit, it would be ignored if done too quickly (faster than 250-500ms).
+ * We do not use mappings for this in order to properly "protect" outputs directly since multiple nodeIDs in mapping can be mapped to 1 output
+ * 
+ * The actual time stored is in quarters per second and no need to worry about overflow - it is about 34 years and unlikely 
+ * there would be any power outage within 34 years :)
+ * 
+ * Only real used outputs are actually set and used, the rest is ignored.
+ */
+unsigned long outputsLastAccessTime[OUTPUTS_COUNT];
+
 /*
  * Private methods
  */
+
+void setLastAccessTime(byte outputNumber, unsigned long time) {
+    outputsLastAccessTime[outputNumber-1] = time;
+}
+
+unsigned long getLastAccessTime(byte outputNumber) {
+    return outputsLastAccessTime[outputNumber-1];
+}
 
 void updateUsedOutputs(byte outputNumber) {
     // outputNumber is 1 based, so we can take directly as the size
     if (outputNumber > usedOutputs.size) {
         usedOutputs.size = outputNumber;
     }
+    // and also update last time for this output to be 0 - this is first time we are enabling it (either on startup or at runtime), so first invocation will reset this time 
+    // to the real time and protection against sporadic access would kick in on subsequent operations
+    setLastAccessTime(outputNumber, 0);    
 }
 
 void updateMappingCache(byte mappingNumber, byte nodeID, byte outputNumber) {
@@ -85,6 +110,7 @@ void updateMappingCache(byte mappingNumber, byte nodeID, byte outputNumber) {
         mappings.size = mappingNumber;
     }
 }
+
 
 /*
  * API methods
@@ -130,17 +156,24 @@ void initMapping () {
     }
 }
 
-Output* nodeIDToOutput (byte nodeID) {
+Output* nodeIDToOutput (byte nodeID, unsigned long time) {
     if (nodeID==UNMMAPED_NODEID) {
         return NULL;
-    }
+    }    
     
     Mapping *m = mappings.array;
     Mapping *mEnd = mappings.array + mappings.size;
     
     for (; m < mEnd; m++) {
         if (m->nodeID == nodeID) {
-            return &outputs[m->outputNumber-1];
+            // now check the last time this output was used and if interval not passed yet, return NULL too
+            if (time > getLastAccessTime(m->outputNumber)) {
+                // if all OK, just update the last access time and return the respective output
+                setLastAccessTime(m->outputNumber, time);
+                return &outputs[m->outputNumber-1];
+            } else {
+                return NULL;
+            }
         }
     }
     
