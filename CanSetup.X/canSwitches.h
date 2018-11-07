@@ -28,17 +28,17 @@ extern "C" {
 typedef enum {
     /** ground floor */
     WORK_ROOM_110         = 0x1,  // 3V/2S 5I done
-    GARAGE_109            = 0x9,  // 3V/1S 3I
-    TECHNICAL_ROOM_108    = 0x11, // 2V/1S 3I 
+    GARAGE_109            = 0x9,  // 3V/1S 3I done
+    TECHNICAL_ROOM_108    = 0x11, // 2V/1S 3I done
     BATHROOM_DOWN_107     = 0x19, // 2V/2S 3I done
     WC_DOWN_107           = 0x21, // 1V/1S 1I done
-    PANTRY_104            = 0x29, // 1V/1S 1I
+    PANTRY_104            = 0x29, // 1V/1S 1I done
     KITCHEN_103           = 0x31, // 2V/7S 8I done
     LIVING_ROOM_103       = 0x39, // 2V/6S 8I done
-    LOBBY_101             = 0x41, // 2V/2S 5I
-    LOBBY_CLOAK_ROOM_101  = 0x49, // 1V/1S 1I
-    HALL_DOWN_102         = 0x51, // 5V/3S 8I
-    GUEST_ROOM_105        = 0x59, // 2V/2S 3I
+    LOBBY_101             = 0x41, // 2V/2S 5I done
+    LOBBY_CLOAK_ROOM_101  = 0x49, // 1V/1S 1I done
+    HALL_DOWN_102         = 0x51, // 5V/3S 8I done
+    GUEST_ROOM_105        = 0x59, // 2V/2S 3I done
     CLEANING_ROOM_106     = 0x61, // 2V/1S 3I
     
     /** 1st floor */
