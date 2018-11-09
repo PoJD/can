@@ -75,7 +75,7 @@ CAN ID
 
 CAN Data
 * NORMAL (0) and COMPLEX (3) message types (aka action message types)
-    * bit 8 and 7 combine the operation (00 togle, 01 ON, 10 OFF, 11 GET). For any message with operation GET the canRelay node would reply with another CAN message (type complex_reply). Will always send the state of all nodeIDs as currently set on the respective floor. (i.e. for any nodeID in the given can relay's range a reply would be sent with all data. E.g. for 0-127 all data for nodes on floor 0, for 128-255, all data on floor 1)
+    * bit 8 and 7 combine the operation (00 togle, 01 ON, 10 OFF, 11 GET). For any message with operation GET the canRelay node would reply with another CAN message (type complex_reply). Will always send the state of all outputs as currently set on the respective floor. (i.e. for any nodeID in the given can relay's range a reply would be sent with all data. E.g. for 0-127 all data for used outputs on floor 0, for 128-255, all data on floor 1)
     * This model in general could lead to CAN conflicts - 2 nodes trying to do 2 different actions for the same node ID and message type. Therefore it is mandated, that if 2 distinct nodes need to change settings of a particular node, the message type has to differ (for example web app running on odroid will always send COMPLEX messages while canSwitch would always send NORMAL messages - so the can switch has precedence since it has lower CAN ID and never results in conflicting state of the CAN bus - e.g. the same node ID, but different message type)
     * This supports also nodeID 0 - with 1 st bit of nodeID equal to floor. Then the action is applied to all nodes - i.e. toggle/on/off all nodes on that floor
 * COMPLEX REPLY (4)
