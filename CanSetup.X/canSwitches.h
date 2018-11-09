@@ -35,7 +35,7 @@ typedef enum {
     PANTRY_104            = 0x29, // 1V/1S 1I
     KITCHEN_103           = 0x31, // 2V/7S 8I
     LIVING_ROOM_103       = 0x39, // 2V/6S 8I
-    LOBBY_101             = 0x41, // 2V/2S 5I
+    LOBBY_101             = 0x41, // 2V/2S 5I OFF FLAG set on IN1
     LOBBY_CLOAK_ROOM_101  = 0x49, // 1V/1S 1I
     HALL_DOWN_102         = 0x51, // 5V/3S 8I
     GUEST_ROOM_105        = 0x59, // 2V/2S 3I
