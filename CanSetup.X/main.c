@@ -16,23 +16,33 @@
  */
 void setupCanSwitch(CanSwitchNode node) {
     DataItem dataItem;
-    dataItem.bucket = 0; // check CanSwitch main.c
+    dataItem.bucket = 0; // check CanSwitch main.c NODE_ID_DAO_BUCKET
     dataItem.value = node;
     dao_saveDataItem(&dataItem);
 }
+
+void setupCanSwitchToSendOffMessagesOnPortB0() {
+    DataItem dataItem;
+    dataItem.bucket = 3; // check CanSwitch main.c OFF_ALL_FLAG_DAO_BUCKET
+    dataItem.value = 1;
+    dao_saveDataItem(&dataItem);
+}
+
 /*
  * Sets up EEPROM of this node as a canRelay - using the floor passed in to be set as FLOOR for CanRelay project
  */
 void setupCanRelay(Floor floor) {
     DataItem dataItem;
-    dataItem.bucket = 0; // check CanRelay main.c
+    dataItem.bucket = 0; // check CanRelay main.c FLOOR_DAO_BUCKET
     dataItem.value = floor;
     dao_saveDataItem(&dataItem);    
 }
 
 int main(void) {
     // for example setup as CanSwitch a room
-    setupCanSwitch(CLEANING_ROOM_106);
+    //setupCanSwitch(CLEANING_ROOM_106);
+    
+    setupCanSwitchToSendOffMessagesOnPortB0();
     
     // or setup as CanRelay for ground floor
     //setupCanRelay(FIRST);

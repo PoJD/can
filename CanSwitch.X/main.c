@@ -24,6 +24,7 @@
 #define NODE_ID_DAO_BUCKET 0
 #define SUPPRESS_SWITCH_DAO_BUCKET 1
 #define HEARTBEAT_TIMEOUT_DAO_BUCKET 2
+#define OFF_ALL_FLAG_DAO_BUCKET 3
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -66,6 +67,8 @@ volatile unsigned long tSecsSinceHeartbeat = 0;
 /** config data - if a config CAN message was sent */
 volatile unsigned int receivedConfigData = 0;
 
+/** a flag indicating whether change on portB0 should be treated as a special operation sending off for all floors  */
+boolean sendOffOnPortB0Change = FALSE;
 
 /*
  * Setup section
@@ -385,13 +388,16 @@ void updateConfigData(DataItem *dataItem) {
                 tHeartbeatTimeout = dataItem->value;
                 break;
             case SUPPRESS_SWITCH_DAO_BUCKET:
-                suppressSwitch = dataItem->value;
+                suppressSwitch = (dataItem->value > 0);
                 break;
             case NODE_ID_DAO_BUCKET:
                 nodeID = dataItem->value;
                 // in this case we also need to configure again to change CAN acceptance filters, etc
                 configure();
-                break;            
+                break;
+            case OFF_ALL_FLAG_DAO_BUCKET:
+                sendOffOnPortB0Change = (dataItem->value > 0);
+                break;
         }
     }
 }
@@ -422,16 +428,17 @@ boolean initConfigData() {
     dataItem = dao_loadDataItem(SUPPRESS_SWITCH_DAO_BUCKET);
     updateConfigData (&dataItem);
     
+    dataItem = dao_loadDataItem(OFF_ALL_FLAG_DAO_BUCKET);
+    updateConfigData (&dataItem);
+
     return TRUE;
 }
 
-void sendCanMessage(MessageType messageType, byte portBPin) {
-    // just 1 blink until next timer interrupt
-    //switchStatusLedOn();
+void sendCanMessage(MessageType messageType, byte nodeID, Operation operation) {
     messageStatus.timestamp = tQuarterSecSinceStart;
     
     CanHeader header;
-    header.nodeID = nodeID + portBPin; // for B0 directly nodeID is sent, up to nodeId+7 depending on which pin was set
+    header.nodeID = nodeID;
     header.messageType = messageType;
     
     CanMessage message;
@@ -444,7 +451,7 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     byte* data = &message.data;
     
     // the actual encoding/decoding has to match between relay and switch, wrapped inside can method below
-    *data++ = can_combineCanDataByte(TOGGLE, TXERRCNT+RXERRCNT, FIRMWARE_VERSION, switchCounter);
+    *data++ = can_combineCanDataByte(operation, TXERRCNT+RXERRCNT, FIRMWARE_VERSION, switchCounter);
     unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
@@ -460,6 +467,25 @@ void sendCanMessage(MessageType messageType, byte portBPin) {
     }
     // use the synchronous version to make sure the message is really sent before moving on
     can_sendSynchronous(&message);
+}
+
+/**
+ * Would typically send just 1 CAN message, but in the case of sendOffOnPortB0Change being TRUE and change on portB 0, it would send 2 CAN messages
+ * 
+ * @param messageType message type to send over
+ * @param portBPin which portB pin was pressed? (0-7)
+ */
+void sendCanMessages(MessageType messageType, byte portBPin) {
+    if (sendOffOnPortB0Change && messageType == NORMAL && portBPin == 0) {
+        // if sendOffOnPortB0Change is set and NORMAL message for portb 0 should be sent, then send 2 CAN messages
+        // send operation OFF for both floors in that case
+        sendCanMessage(messageType, GROUND, OFF);
+        sendCanMessage(messageType, FIRST, OFF);
+    } else {
+        // for all other cases, simply send nodeID + port B pin changed as nodeID and toggle as operation
+        // for B0 directly nodeID is sent, up to nodeId+7 depending on which pin was set
+        sendCanMessage(messageType, nodeID + portBPin, TOGGLE);
+    }
 }
 
 /**
@@ -484,14 +510,14 @@ int main(void) {
                 // we have 1s there where the input is on right now (weak pull ups but reverted in portbChanged function)
                 for (int i=0; i<8; i++) {
                     if (portbStatus & (1 << i)) {
-                        sendCanMessage(NORMAL, i);
+                        sendCanMessages(NORMAL, i);
                     }
                 }
             }
             switchPressed = FALSE;
         }
         if (timerElapsed) {
-            sendCanMessage(HEARTBEAT, 0);
+            sendCanMessages(HEARTBEAT, 0);
             timerElapsed = FALSE;
         }
         if (receivedConfigData) {

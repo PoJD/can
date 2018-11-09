@@ -26,6 +26,7 @@ Key features:
 * Typical values in HEX now sent for the CanSwitches (firmware version 0, no errors and toggle) shall be in range 0-7 - just the switch counter in there. For anything larger, a CAN error or new firmware version
 * The switch now supports wiring up to 8 real wall switches to minimize the need to have PCB in each wall switch. This switch can then send CAN message for any of the 8 B port input changes to logical zero. The switch then sends CAN ID of nodeID + PORTB pin number, e.g. nodeID directly for change on B0, nodeID+1 for change on B1, etc
 * As long as the wall switch count does not exceed 8, each can be tight up to individual input pin even if it 2 or more physical light switches should be switching on 1 output pin on CanRelay. Just the respective mapping has to be set properly. See mapping of ports section in CanRelay.X
+* If EEPROM bucket 3 is set to a value greater than 0, then the CanSwitch would actually send 2 messages on change on input portB0 to set OFF both floors (e.g. canID in that case would be equal to floor GROUND and floor FIRST respectively, data byte would be similar as above, just the 2 bits for operation would be equal to 0b10 = OFF. By default when this EEPROM bucket is not set, this behavior would not kick in
 * DEBUG mode
     * Disabled by default and needs to be enabled in firmware (defined constant in firmware file)
     * non DEBUG mode (default) heavily utilizes power savings, putting the chip to sleep using low current drawning specs to minimize power consumption, disabling the crystal, whole chip and even the transceiver, only waken up by input interrupt. Current drawn in sleep measured as low as 1.8uA. The current drawn in non DEBUG mode is about 18mA instead.
@@ -110,6 +111,7 @@ See below examples as they can be used with the cansend utility (http://elinux.o
 * 202#81.2C - changes heartbeat for node 2 to 300 seconds (5 minutues = default)
 * 202#40.01 - switches on suppress switch on node 2 (pressing the switch on that node after this action will have no effect - no CAN message would get sent)
 * 202#00.03 - changes nodeID for node 2 to nodeID 3 (so after this, the same message would not get processed by the same node again anymore since the nodeID changed)
+* 201#C0.01 - sets the flag of node 1 to send OFF messages for both floors when switch press on port B 0 is detected
 * 011#10    - toggles the switch on node 11 (here the number in the data can be any number as long as first 2 bits are 0, i.e. anything from 0 to 3F. Ranges would then tell more about the actual sending chip as per the encoding of the data byte. See https://github.com/PoJD/piclib/blob/master/can.h method can_combineCanDataByte. E.g. for firmware version 1 and no errors the CanSwitch would actually send data byte between 08 and 0F
 * 000#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 0 (using NORMAL message)
 * 080#00 - should never be sent in the current implementation, but would effectively toggle all outputs on floor 1
