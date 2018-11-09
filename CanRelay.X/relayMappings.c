@@ -167,7 +167,8 @@ Output* nodeIDToOutput (byte nodeID, unsigned long time) {
     for (; m < mEnd; m++) {
         if (m->nodeID == nodeID) {
             // now check the last time this output was used and if interval not passed yet, return NULL too
-            if (time > getLastAccessTime(m->outputNumber)) {
+            // we count in quarters per second, so make sure at least 1 quarter already passed
+            if (time > getLastAccessTime(m->outputNumber) + 1) {
                 // if all OK, just update the last access time and return the respective output
                 setLastAccessTime(m->outputNumber, time);
                 return &outputs[m->outputNumber-1];
