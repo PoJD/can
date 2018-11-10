@@ -167,11 +167,12 @@ void configureCan() {
     can_setupBaudRate(BAUD_RATE, CPU_SPEED);
     
     // now setup CAN to receive only CONFIG message types for this node ID
-    CanHeader header;
-    header.nodeID = nodeID;
-    header.messageType = CONFIG;
-    can_setupStrictReceiveFilter(&header);
-
+    if (DEBUG) {
+        CanHeader header;
+        header.nodeID = nodeID;
+        header.messageType = CONFIG;
+        can_setupStrictReceiveFilter(&header);
+    }
     // switch CAN to normal mode (using real underlying CAN)
     can_setMode(NORMAL_MODE);
     
