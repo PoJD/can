@@ -83,25 +83,16 @@ void configureSpeed() {
 }
 
 void clearInterruptFlags() {
+    // now wait some time for potential false triggers to sink in before enabling the interrupt below
+    for (byte i=0; i<5; i++) {
+        NOP();
+    }
+
     INTCONbits.INT0IF = 0;
     INTCON3bits.INT1IF = 0;
     INTCON3bits.INT2IF = 0;
     INTCON3bits.INT3IF = 0;
     INTCONbits.RBIF = 0;    
-}
-
-void enableInputInterrupts(boolean enable) {
-    // clear the interrupt flags (could be set before)
-    clearInterruptFlags();
-    
-    // till now enable/disable external interrupt (change on portb0:3)
-    INTCONbits.INT0IE = enable;
-    INTCON3bits.INT1IE = enable;
-    INTCON3bits.INT2IE = enable;
-    INTCON3bits.INT3IE = enable;
-    
-    // the same for interrupt on change (change on portb4:7)
-    INTCONbits.RBIE = enable;
 }
 
 void configureInput() {
@@ -132,13 +123,17 @@ void configureInput() {
     
     // enable all interrupts on change on b4:7
     IOCB = 0b11110000;
-
-    // now wait some time for potential false triggers to sink in before enabling the interrupt below
-    for (byte i=0; i<5; i++) {
-        NOP();
-    }
     
-    enableInputInterrupts(TRUE);
+    clearInterruptFlags();
+
+    // till now enable/disable external interrupt (change on portb0:3)
+    INTCONbits.INT0IE = TRUE;
+    INTCON3bits.INT1IE = TRUE;
+    INTCON3bits.INT2IE = TRUE;
+    INTCON3bits.INT3IE = TRUE;
+    
+    // the same for interrupt on change (change on portb4:7)
+    INTCONbits.RBIE = TRUE;
 }
 
 void configureTimer() {
@@ -212,6 +207,10 @@ void checkInputChanged() {
         // change the flag to let the main thread handle input change
         switchPressed = TRUE;
         switchCounter++;
+        
+        // apart from clearing the interrupts, also disabled them - main thread should enable it again later
+        // should help with sporadic triggers from multiple inputs at the same time
+        di();
         clearInterruptFlags();
     }
 }
@@ -488,6 +487,13 @@ void sendCanMessages(MessageType messageType, byte portBPin) {
     }
 }
 
+void switchPressProcessed() {
+    switchPressed = FALSE;
+    // just in case clear any potential input interrupts and enable interrupts again
+    clearInterruptFlags();
+    ei();
+}
+
 /**
  * Main method runs and checks various flags potentially set by various interrupts - invokes action points upon such a condition
  */
@@ -514,7 +520,7 @@ int main(void) {
                     }
                 }
             }
-            switchPressed = FALSE;
+            switchPressProcessed();
         }
         if (timerElapsed) {
             sendCanMessages(HEARTBEAT, 0);
