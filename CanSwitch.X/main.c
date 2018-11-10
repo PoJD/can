@@ -450,7 +450,8 @@ void sendCanMessage(MessageType messageType, byte nodeID, Operation operation) {
     byte* data = &message.data;
     
     // the actual encoding/decoding has to match between relay and switch, wrapped inside can method below
-    *data++ = can_combineCanDataByte(operation, TXERRCNT+RXERRCNT, FIRMWARE_VERSION, switchCounter);
+    // use only transmit buffer errors, ignore receive buffer errors in data since we only care about sending CAN traffic over
+    *data++ = can_combineCanDataByte(operation, TXERRCNT, FIRMWARE_VERSION, switchCounter);
     unsigned long timeSinceStart = tQuarterSecSinceStart / 4;
     
     if (messageType == HEARTBEAT) {
