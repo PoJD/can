@@ -42,13 +42,14 @@ typedef enum {
     CLEANING_ROOM_106     = 0x61, // 2V/1S 3I
     
     /** 1st floor */
-    CHILD_ROOM_1_205      = 0x81,
-    CHILD_ROOM_2_207      = 0x89,
-    CHILD_BATHROOM_206    = 0x91,
-    HALL_UP_201           = 0x99,
-    BEDROOM_202           = 0xA1,
-    BEDROOM_BATHROOM_203  = 0xA9,
-    CLOAK_ROOM_204        = 0xB1
+    CHILD_ROOM_1_205      = 0x81, // 3V/2S 5I done
+    CHILD_BATHROOM_206    = 0x89, // 2V/1S 3I done
+    CHILD_ROOM_2_207      = 0x91, // 3V/2S 5I done
+    HALL_UP_201           = 0x99, // 5V/2S 8I 
+    BEDROOM_202           = 0xA1, // 4V/2S 8I 
+    BEDROOM_BATHROOM_203  = 0xA9, // 4V/2S 8I 
+    CLOAK_ROOM_204        = 0xB1, // 2V/1S 3I 
+    LAUNDRY_204           = 0xB9  // 2V/1S 3I     
 } CanSwitchNode;
 
 typedef enum {

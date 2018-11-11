@@ -40,9 +40,9 @@ void setupCanRelay(Floor floor) {
 
 int main(void) {
     // for example setup as CanSwitch a room
-    //setupCanSwitch(CLEANING_ROOM_106);
+    setupCanSwitch(CHILD_ROOM_2_207);
     
-    setupCanSwitchToSendOffMessagesOnPortB0();
+    //setupCanSwitchToSendOffMessagesOnPortB0();
     
     // or setup as CanRelay for ground floor
     //setupCanRelay(FIRST);
