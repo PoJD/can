@@ -42,9 +42,9 @@ typedef enum {
     CLEANING_ROOM_106     = 0x61, // 2V/1S 3I
     
     /** 1st floor */
-    CHILD_ROOM_1_205      = 0x81, // 3V/2S 5I done
-    CHILD_BATHROOM_206    = 0x89, // 2V/1S 3I done
-    CHILD_ROOM_2_207      = 0x91, // 3V/2S 5I done
+    CHILD_ROOM_1_205      = 0x81, // 3V/2S 5I
+    CHILD_BATHROOM_206    = 0x89, // 2V/1S 3I
+    CHILD_ROOM_2_207      = 0x91, // 3V/2S 5I
     HALL_UP_201           = 0x99, // 5V/2S 8I 
     BEDROOM_202           = 0xA1, // 4V/2S 8I 
     BEDROOM_BATHROOM_203  = 0xA9, // 4V/2S 8I 
