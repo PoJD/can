@@ -5,6 +5,8 @@ Everything was originally implemented using microcontroller PIC18F25K80, but ass
 
 As of firmware version 2 of CanRelay, CanRelay actually uses CPU PIC18F45K80 (44 pin TFQP) as opposed to CanSwitch with PIC18F25K80. The reason being more output ports on CanRelay. 
 
+As of 18th November 2018, this was successfully tested using 22 CanSwitches, 2 CanRelays, 1 USBTin all wired over 300m long CAT5 cable. Stable, 5V ran across the whole line, CanRelays at the very end connected power lines, but the CanSwitches all get juice from the long cable (about 2-3 uA each only). All works like a charm, voltage drop only about 0.02V at the farthest node. So now finished DEV and ready to deploy this to my house! (just dynamic mapping pending in CanRelay, but can probably do that directly in the house then when setting things up and testing CanSwitches).
+
 ## Technologies
 
 * Microchip XC8 compiler
