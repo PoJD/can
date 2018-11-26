@@ -105,7 +105,8 @@ CAN Data
     * Only CanRelay would reply to this traffic. For this message type and nodeID = floor, regardless the data frame, the respective CanRelay would send over all relayMappings it currently uses at runtime to translate from nodeIDs to outputs. The CAN ID would be = MAPPING_REPLY + floor nodeID
     * If more than 8 mappings are used, it would split the mappings into multiple CAN messages
     * no counter sent or total size, just all mappings over
-    * Is meant to be used in target application only for testing purpose to confirm mappings set and used in CanRelay since this would occupy the chip for quite some time and could lead to dropped operation traffic (no buffer overflow in there and if it would to be sending say 32 messages, that would add up to quite some amount of time already, so do not use this message in PROD!
+    * Is meant to be used in target application only for testing purpose to confirm mappings set and used in CanRelay since this would occupy the chip for quite some time and could lead to dropped operation traffic (no buffer overflow in there and if it would to be sending say 32 messages, that would add up to quite some amount of time already, so do not use this message too often!
+    * The last 2 bytes of the last message would always be FF and FF to use as a marker that no more CAN traffic would follow for any client logic depending on this
 
 ### Examples
 See below examples as they can be used with the cansend utility (http://elinux.org/Can-utils). So you can invoke e.g. cansend can0 XXX, where XXX is in the below table
@@ -130,7 +131,7 @@ See below examples as they can be used with the cansend utility (http://elinux.o
 
 #### Mappings
 * 500#00 - get all runtime mappings of floor 0
-    * A reply could look like: 600#01.01.02.02.03.02.05.03 - so just 4 mappings for this floor, mapping nodeID 1 to output 1, nodeID 2 to output 2, nodeID 3 to output 2 and nodeID 5 to output 3
+    * A reply could look like: 600#01.01.02.02.03.02.FF.FF - so just 3 mappings for this floor, mapping nodeID 1 to output 1, nodeID 2 to output 2, nodeID 3 to output 2 and last 2 bytes used as marker for no more messages as a reply to the mapping request
 
 
 ## Setting up CAN on Odroid

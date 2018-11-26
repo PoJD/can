@@ -17,10 +17,13 @@
 
 #define BAUD_RATE 50 // speed in kbps
 #define CPU_SPEED 16 // speed in MHz
-#define FIRMWARE_VERSION 3
+#define FIRMWARE_VERSION 1
 
 /** bucket of the floor of this node in DAO */
 #define FLOOR_DAO_BUCKET 0
+
+/** marker for last mapping message */
+#define MAPPINGS_END_MARKER 0xFF
 
 /** 
  * These should be constants really (written and read from EEPROM)
@@ -341,10 +344,13 @@ void sendCanMessagesWithAllMappings() {
         }
     }
     
-    if (dataLength > 0) {
-        // we already put some packets in data, so send what we have now
-        sendOneCanMessageWithMappings(&message, dataLength);
-    }
+    // append 2 markers (so that we always see pairs of numbers)
+    // and any clients listening to this traffic would know that this is the last message
+    // we may have some residual data already from the above loop, but 6 bytes top, so we can add 2 more
+    *data++ = MAPPINGS_END_MARKER;
+    *data++= MAPPINGS_END_MARKER;
+    dataLength+=2;    
+    sendOneCanMessageWithMappings(&message, dataLength);
 }
 
 
